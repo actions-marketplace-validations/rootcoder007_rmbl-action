@@ -433,7 +433,7 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `manifests` | | Glob restricting the capsule files checked, matched against their path, e.g. `capsules/ontario/*`. `*` also matches `/`. |
 | `wayback` | `false` | During `refresh`, capture each changed `https` source in the Wayback Machine. Needs `IA_S3_ACCESS_KEY` and `IA_S3_SECRET_KEY` in the step env. A failed capture is a note, not an error. |
 | `cache` | `false` | Keep fetched sources and data.rmorie.com tables in `.rmbl-cache/` (save and restore it with `actions/cache`). A cached source is used only when the live fetch fails, and the report says so. |
-| `allow-file` | `false` | Accept `file://` source URLs, for local mirrors and tests. |
+| `allow-file` | `false` | Accept `file://` source URLs that name a file inside the checked-out repository, for local mirrors and tests; a file elsewhere on the runner is refused. |
 
 On GitHub the key comes only from the `key` input: a variable named `RMBL_KEY` in the job's
 or workflow's `env` never reaches the checks, so an empty `key` cannot sign with it. Run by
@@ -563,8 +563,9 @@ Report a vulnerability privately: [`.github/SECURITY.md`](.github/SECURITY.md).
   each capsule's source (and its Wayback snapshot when the source is down).
 - Nothing is uploaded anywhere, except the comment and, with `wayback: true`, the request to
   the Internet Archive to capture the source URLs with your archive.org keys.
-- `file://` sources are refused unless `allow-file: true`; plain `http://` and private
-  addresses are refused by the package.
+- `file://` sources are refused unless `allow-file: true`, and then only files inside the
+  checked-out repository (`GITHUB_WORKSPACE`); plain `http://` and private addresses are refused
+  by the package.
 - Post-quantum bundles (ML-DSA-65, SLH-DSA, XMSS) verify in every mode. `mode: sign` writes
   `hmac` bundles only: an XMSS key is stateful (RFC 10033), and `rmbl sign --scheme xmss-sha256`
   refuses to run from a key in an environment variable unless `--state-file` names a file that

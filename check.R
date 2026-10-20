@@ -93,7 +93,7 @@ if (nzchar(base_ref)) {
 }
 
 x <- cpschk(root, if (mode == "sign") "verify" else mode, key = key, pubkey = env("RMBL_PUBLIC_KEY"), psiwarn = psi_warn, psifail = psi_fail,
-            base = base, cache = if (flags$cache) cache_dir else FALSE, allowfile = flags$allow_file,
+            base = base, cache = if (flags$cache) cache_dir else FALSE, allowfile = if (flags$allow_file) ws else FALSE,
             snapshot = flags$snapshot, wayback = flags$wayback, glob = env("RMBL_MANIFESTS"))
 # refreshed files belong to the runner's user, not this container's
 changed <- vapply(Filter(function(cp) isTRUE(cp$changed), x$capsules), `[[`, "", "capsule")

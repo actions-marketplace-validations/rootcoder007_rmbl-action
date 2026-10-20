@@ -61,7 +61,7 @@ inputs:
     description: "true: keep fetched sources and data.rmorie.com tables in .rmbl-cache/ of the workspace (restore it with actions/cache). A cached source is used only when the live fetch fails."
     default: "false"
   allow-file:
-    description: "true: accept file:// source URLs (local mirrors, tests)."
+    description: "true: accept file:// source URLs (local mirrors, tests) that name a file inside the checked-out repository (GITHUB_WORKSPACE); files elsewhere on the runner are never read."
     default: "false"
 
 outputs:
