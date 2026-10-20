@@ -1,0 +1,26 @@
+name: Bug report
+description: The action reported something wrong, failed when it should not, or passed when it should have failed.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Action version
+      description: The ref in your workflow (v1, v1.0.0 or a commit SHA), and the rmoriebricklayer version in the report footer.
+    validations:
+      required: true
+  - type: textarea
+    id: step
+    attributes:
+      label: The workflow step
+      description: The `uses: rootcoder007/rmbl-action` step with its inputs. Leave secrets out.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Paste the report, or the rows of rmbl-results.json that are wrong. A link to a public run helps most.
+    validations:
+      required: true

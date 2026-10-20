@@ -1,5 +1,8 @@
 # rmbl-action
 
+[![test](https://github.com/rootcoder007/rmbl-action/actions/workflows/test.yml/badge.svg)](https://github.com/rootcoder007/rmbl-action/actions/workflows/test.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/rootcoder007/rmbl-action/badge)](https://scorecard.dev/viewer/?uri=github.com/rootcoder007/rmbl-action)
+
 A GitHub Action that checks reproducible data capsules: a data file pinned by a JSON
 provenance record, optionally with a results manifest and a signed bundle. It finds every
 capsule under a directory, checks it with the R package
@@ -10,6 +13,25 @@ the job according to `fail-on`.
 
 The repository being checked can be in any language: a capsule is JSON plus data files, and
 R runs only inside the action's container.
+
+```yaml
+permissions:
+  contents: read
+jobs:
+  capsules:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: rootcoder007/rmbl-action@v1
+        with:
+          path: capsules
+```
+
+A sample of the report it writes to the job summary is in
+[`examples/rmbl-report.md`](examples/rmbl-report.md), with the matching JSON in
+[`examples/rmbl-results.json`](examples/rmbl-results.json).
 
 ## Any language
 
@@ -129,11 +151,15 @@ of each `http(s)` source is looked up with `wbsnpurl()`.
 ```yaml
 name: capsules
 on: push
+permissions:
+  contents: read
 jobs:
   rmbl-action:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: rootcoder007/rmbl-action@v1
 ```
 
@@ -155,18 +181,50 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # the base branch's manifests, for the comparison
+          persist-credentials: false
       - uses: rootcoder007/rmbl-action@v1
+        id: rmbl
         with:
           path: capsules
           comment: ${{ github.event_name == 'pull_request' }}
           # public-key: ${{ vars.CAPSULE_PUBLIC_KEY }}  # pin the bundle signer
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}  # keep the results of a failing check too
+        with:
+          name: rmbl-results
+          path: |
+            ${{ steps.rmbl.outputs.json }}
+            ${{ steps.rmbl.outputs.report }}
 ```
 
 The comment is edited in place on every run (it carries the hidden marker
 `<!-- rmbl-action -->`). On a pull request from a fork the token is read-only: the comment
 is skipped with a warning and the check still runs.
+
+### Several capsule trees (monorepo)
+
+One job per tree, each with its own summary and result:
+
+```yaml
+jobs:
+  capsules:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        tree: [capsules/ontario, capsules/quebec]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: rootcoder007/rmbl-action@v1
+        with:
+          path: ${{ matrix.tree }}
+```
+
+Or one job over all of them, restricted with `manifests` (for example `capsules/*`).
 
 ### Nightly drift check that opens an issue
 
@@ -184,6 +242,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: .rmbl-cache
@@ -336,6 +396,19 @@ Each capsule gets one result:
 No capsules under `path` is not a failure: `status` is `ok`. A changed manifest is reported,
 not failed; gate on the `manifest-changed` output if you want that.
 
+To see a failure without failing the job, set `fail-on: never` and act on `status`, or keep
+the failure and add `continue-on-error: true` to the step: later steps then read
+`steps.<id>.outcome` (`failure`) and the outputs, as the test workflow does.
+
+## Permissions
+
+| Feature | Token permissions |
+|---|---|
+| `verify`, `drift`, `report`, the job summary, annotations | `contents: read` |
+| `comment: true` | `pull-requests: write`, and `GITHUB_TOKEN` in the step env |
+| `refresh` with a pull request (peter-evans/create-pull-request) | `contents: write`, `pull-requests: write` |
+| Manifest comparison | none beyond `contents: read`; the base ref must be fetched (`fetch-depth: 0`) |
+
 ## Local use without GitHub
 
 The same checks run from any stack, on a laptop or in another CI (GitLab, Jenkins), with
@@ -351,22 +424,37 @@ This is the action's `verify` mode: the exit status follows `fail-on` (`-e RMBL_
 and the report and JSON land in `rmbl-report.md` and `rmbl-results.json`. Every input is an
 `RMBL_` variable (`RMBL_MODE`, `RMBL_PUBLIC_KEY`, `RMBL_KEY`, `RMBL_ALLOW_FILE`, ...). The base
 image `ghcr.io/rootcoder007/rmorie-bricklayer` has the package installed and `rmbl` on its
-path, but `rmbl` has no verify verb: use this image for the checks.
+path; its `rmbl verify|drift|report|refresh <dir> [--json] [--fail-on ...]` runs the
+package's capsule checks with the same summary layout, without the PSI bands, the manifest
+comparison, the cache, the comment and the annotations this image adds.
 
 ## Versions
 
-Pin a major version, `rootcoder007/rmbl-action@v1`. The `v1` tag is moved to each `v1.x.y`
-release; pin a full tag such as `@v1.0.0`, or a commit SHA, to freeze it.
+`rootcoder007/rmbl-action@v1` follows the latest `v1.x.y` release; the `v1` tag is moved
+only by the release workflow, after every test job passed on that commit. To freeze the
+action, pin the full commit SHA of a release with its version in a comment, which
+Dependabot (`package-ecosystem: github-actions`) keeps current:
+
+```yaml
+      - uses: rootcoder007/rmbl-action@<full commit SHA> # v1.0.0
+```
+
+Changes are listed in [`CHANGELOG.md`](CHANGELOG.md) and the release notes.
 
 ## How the image is built
 
 `runs.using: docker` with this repository's `Dockerfile`: it starts from
-`ghcr.io/rootcoder007/rmorie-bricklayer:latest` (R, the analysis packages and
-rmoriebricklayer installed, rebuilt from the package's main branch) and adds `entrypoint.sh`,
-`check.R` and `spec/`. The checks are calls to the package's exported functions; nothing
-else is installed.
+`ghcr.io/rootcoder007/rmorie-bricklayer` (R, the analysis packages and rmoriebricklayer
+installed) pinned by digest, and adds `entrypoint.sh`, `check.R` and `spec/`. The checks are
+calls to the package's exported functions; nothing else is installed. A given action commit
+therefore always runs the same package build. The `Dockerfile` records the tag the digest
+came from; when the package's image is rebuilt, Dependabot (`package-ecosystem: docker`)
+opens a pull request with the new digest, the test workflow runs on it, and a release moves
+`v1` to it.
 
 ## Security
+
+Report a vulnerability privately: [`.github/SECURITY.md`](.github/SECURITY.md).
 
 - `key` is passed to the container only as an environment variable, masked in the log,
   and never written to a file. The package sends it only to the data service named in its
