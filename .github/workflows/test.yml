@@ -36,7 +36,9 @@ jobs:
           test -s "${{ steps.rmbl.outputs.report }}"
           test -s "${{ steps.rmbl.outputs.json }}"
           grep -q '| `caps/one` |' rmbl-report.md
-          cat rmbl-report.md
+          grep -q 'schema: data_provenance.json | valid against capsule.schema.json' rmbl-report.md
+          grep -q 'round 5 · supp 10' rmbl-report.md
+          grep -q '^Footprint of these checks (co2fp()' rmbl-report.md
 
   cases:
     runs-on: ubuntu-24.04
@@ -85,16 +87,19 @@ jobs:
           test "${{ steps.otherkey.outcome }}" = failure
           test "${{ steps.otherkey.outputs.status }}" = error
 
-      - name: Drift, source unchanged
+      - name: Drift, source unchanged, snapshot lookup skipped for a local source
         uses: ./
         id: same
         with:
           path: caps
           mode: drift
           allow-file: true
+          snapshot: true
+          report: same.md
       - run: |
           test "${{ steps.same.outputs.status }}" = ok
           test -z "${{ steps.same.outputs.changed }}"
+          grep -q 'snapshot: not looked up (not an http(s) source)' same.md
 
       - name: Rescale the source
         run: |
@@ -114,6 +119,7 @@ jobs:
           test "${{ steps.drift.outputs.status }}" = drift
           test "${{ steps.drift.outputs.changed }}" = caps/one
           grep -q '"result": "drift"' drift.json
+          grep -q '| ⚠ | value | numeric | KS D' drift.md
       - name: Drift, fail-on drift
         uses: ./
         id: driftfail
@@ -124,6 +130,27 @@ jobs:
           fail-on: drift
           allow-file: true
       - run: test "${{ steps.driftfail.outcome }}" = failure
+      - name: Same change under a wide fail band is a warning
+        uses: ./
+        id: warn
+        with:
+          path: caps
+          mode: drift
+          allow-file: true
+          psi-fail: 5
+          fail-on: drift
+      - run: test "${{ steps.warn.outputs.status }}" = warn
+      - name: Warning, fail-on warn
+        uses: ./
+        id: warnfail
+        continue-on-error: true
+        with:
+          path: caps
+          mode: drift
+          allow-file: true
+          psi-fail: 5
+          fail-on: warn
+      - run: test "${{ steps.warnfail.outcome }}" = failure
 
       - name: Refresh
         uses: ./
@@ -163,6 +190,41 @@ jobs:
           path: caps
           fail-on: never
       - run: test "${{ steps.tamperednever.outputs.status }}" = error
+      - name: Annotations name the file and the check
+        run: |
+          docker run --rm -v "$PWD:/github/workspace" -w /github/workspace -e GITHUB_WORKSPACE=/github/workspace \
+            -e RMBL_PATH=caps -e RMBL_FAIL_ON=never rmbl-local > annotations.txt
+          grep -q '^::error file=caps/one/data_provenance.json,title=rmbl provenance data_sha256::expected ' annotations.txt
+
+      - name: A refused source URL is explained
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
+            --entrypoint Rscript rmbl-local tests/make-capsule.R refused/x fixtures/refused.csv /github/workspace
+          sed -i 's#"direct_url": "[^"]*"#"direct_url": "http://127.0.0.1/data.csv"#' refused/x/data_provenance.json
+      - uses: ./
+        id: refused
+        with:
+          path: refused
+          mode: drift
+          fail-on: never
+          report: refused.md
+      - run: |
+          test "${{ steps.refused.outputs.status }}" = error
+          grep -q 'explained: raised by .rmbl_check_public_url()' refused.md
+
+      - name: A provenance that breaks the capsule schema
+        run: |
+          mkdir -p badspec/x
+          echo '{"resource": {"filename": "d.csv", "sha256": "abc"}}' > badspec/x/data_provenance.json
+      - uses: ./
+        id: badspec
+        with:
+          path: badspec
+          fail-on: never
+          report: badspec.md
+      - run: |
+          test "${{ steps.badspec.outputs.status }}" = error
+          grep -q 'schema: data_provenance.json | $.resource.sha256: does not match' badspec.md
 
       - name: Unknown mode
         uses: ./
@@ -171,3 +233,148 @@ jobs:
         with:
           mode: nonsense
       - run: test "${{ steps.badmode.outcome }}" = failure
+
+  manifests-and-comment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: A capsule with a results manifest committed on a base branch, then edited
+        run: |
+          r() { docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
+                  --entrypoint Rscript rmbl-local "$@"; }
+          r tests/make-capsule.R mcaps/one fixtures/m.csv /github/workspace
+          r -e 'library(rmoriebricklayer); m <- mkmnf(list(dataset = "fixture"), env = FALSE)
+                m <- recrd(m, "mean_x", obs = 5.5, expd = 5.5, tol = 0.01)
+                m <- recrd(m, "n", obs = 10, expd = 10, tol = 0)
+                wrmnfjs(m, "mcaps/one/manifest.json")'
+          git switch -c rmbl-base
+          git add mcaps fixtures
+          git -c user.name=rootcoder007 -c user.email=278967282+rootcoder007@users.noreply.github.com \
+            commit -q -m "base manifest"
+          r -e 'library(rmoriebricklayer); m <- mkmnf(list(dataset = "fixture"), env = FALSE)
+                m <- recrd(m, "mean_x", obs = 5.505, expd = 5.505, tol = 0.01)
+                m <- recrd(m, "n", obs = 11, expd = 11, tol = 0)
+                m <- recrd(m, "sd_x", obs = 1.2, expd = 1.2, tol = 0.01)
+                wrmnfjs(m, "mcaps/one/manifest.json")'
+      - uses: ./
+        id: mdiff
+        with:
+          path: mcaps
+          base-ref: rmbl-base
+          comment: dry-run
+          report: mdiff.md
+      - run: |
+          cat mdiff.md
+          test "${{ steps.mdiff.outputs.manifest-changed }}" = true
+          test "${{ steps.mdiff.outputs.comment }}" = dry-run
+          grep -q '| ✔ | mean_x | 5.5 | 5.505 | 0.005 (within tol) | 0.01 |' mdiff.md
+          grep -q '| ✖ | n | 10 | 11 | 1 (outside tol) | 0 |' mdiff.md
+          grep -q '| new | sd_x |' mdiff.md
+          head -1 rmbl-comment.md | grep -qx '<!-- rmbl-action -->'
+      - name: Comment without a token
+        uses: ./
+        id: notoken
+        with:
+          path: mcaps
+          comment: true
+      - run: |
+          test "${{ steps.notoken.outputs.comment }}" = skipped
+          test "${{ steps.notoken.outputs.status }}" = ok
+      - name: Unchanged manifest
+        run: git checkout -- mcaps
+      - uses: ./
+        id: msame
+        with:
+          path: mcaps
+          base-ref: rmbl-base
+      - run: test "${{ steps.msame.outputs.manifest-changed }}" = false
+
+  example-r:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: Author the capsule in R
+        run: |
+          mkdir -p out/r && cp examples/data/sample.csv out/r/
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w --entrypoint Rscript rmbl-local \
+            examples/r/make_capsule.R out/r/sample.csv https://example.org/sample.csv
+      - uses: ./
+        id: rmbl
+        with:
+          path: out
+      - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: capsule-r
+          path: out/r/data_provenance.json
+
+  example-python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Author the capsule in Python (standard library only)
+        run: |
+          mkdir -p out/python && cp examples/data/sample.csv out/python/
+          python3 examples/python/make_capsule.py out/python/sample.csv https://example.org/sample.csv
+      - name: Author a capsule with the README's Python snippet
+        run: |
+          mkdir -p out/snippet && cp examples/data/sample.csv out/snippet/data.csv
+          awk '/^```python$/{f=1; next} /^```$/{f=0} f' README.md > snippet.py
+          (cd out/snippet && python3 ../../snippet.py)
+      - uses: ./
+        id: rmbl
+        with:
+          path: out
+      - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 2
+      - uses: actions/upload-artifact@v7
+        with:
+          name: capsule-python
+          path: out/python/data_provenance.json
+
+  example-c:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and run the C author (OpenSSL EVP)
+        run: |
+          test -f /usr/include/openssl/evp.h || (sudo apt-get update && sudo apt-get install -y libssl-dev)
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -o make_capsule examples/c/make_capsule.c -lcrypto
+          mkdir -p out/c && cp examples/data/sample.csv out/c/
+          ./make_capsule out/c/sample.csv https://example.org/sample.csv
+      - name: Author a capsule with the README's shell snippet
+        run: |
+          mkdir -p out/shell && cp examples/data/sample.csv out/shell/data.csv
+          awk '/^```sh$/{f=1; next} /^```$/{f=0} f' README.md > snippet.sh
+          (cd out/shell && bash ../../snippet.sh)
+      - uses: ./
+        id: rmbl
+        with:
+          path: out
+      - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 2
+      - uses: actions/upload-artifact@v7
+        with:
+          name: capsule-c
+          path: out/c/data_provenance.json
+
+  examples-agree:
+    needs: [example-r, example-python, example-c]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: capsule-*
+      - name: The three provenance files match, retrieval date aside
+        run: |
+          for l in r python c; do jq -S 'del(.source.retrieved)' "capsule-$l/data_provenance.json" > "$l.json"; done
+          cat c.json
+          cmp r.json python.json
+          cmp r.json c.json
