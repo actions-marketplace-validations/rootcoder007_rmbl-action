@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write  # push the tags and create the draft release
+      id-token: write  # sign the source archive (build provenance attestation)
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,5 +48,21 @@ jobs:
           git tag -f "$major" "$GITHUB_SHA"
           git push origin "refs/tags/$VERSION"
           git push -f origin "refs/tags/$major"
-          gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION"
+          git archive --format=tar.gz --prefix="rmbl-action-$VERSION/" -o "rmbl-action-$VERSION.tar.gz" "$VERSION"
+          sha256sum "rmbl-action-$VERSION.tar.gz" > "rmbl-action-$VERSION.tar.gz.sha256"
+          gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION" \
+            "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
           echo "$VERSION and $major -> $GITHUB_SHA; draft release created" >> "$GITHUB_STEP_SUMMARY"
+      - name: Sign the source archive (Sigstore provenance attestation)
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: rmbl-action-${{ inputs.version }}.tar.gz
+      - name: Attach the attestation bundle to the draft release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE" "rmbl-action-$VERSION.intoto.jsonl"
+          gh release upload "$VERSION" "rmbl-action-$VERSION.intoto.jsonl"
