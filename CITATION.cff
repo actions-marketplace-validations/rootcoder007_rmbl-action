@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this action, please cite it and the rmoriebricklayer package it runs."
+type: software
+title: "rmbl-action: verify, refresh and report rmoriebricklayer data capsules in CI"
+authors:
+  - family-names: "Ruhela"
+    given-names: "Vansh Singh"
+    orcid: "https://orcid.org/0009-0004-1750-3592"
+    affiliation: "Centre for Criminology and Sociolegal Studies, University of Toronto"
+version: "1.0.0"
+date-released: "2026-10-20"
+repository-code: "https://github.com/rootcoder007/rmbl-action"
+url: "https://github.com/marketplace/actions/rmbl"
+license: "AGPL-3.0-or-later"
+keywords:
+  - github-actions
+  - provenance
+  - data-integrity
+  - reproducibility
+  - post-quantum
+references:
+  - type: software
+    title: "rmoriebricklayer: Reproducible Data Capsules with Provenance and Fallback"
+    authors:
+      - family-names: "Ruhela"
+        given-names: "Vansh Singh"
+        orcid: "https://orcid.org/0009-0004-1750-3592"
+    year: "2026"
+    version: "1.0.0"
+    doi: "10.32614/CRAN.package.rmoriebricklayer"
+    url: "https://rootcoder007.r-universe.dev/rmoriebricklayer"
+    repository-code: "https://github.com/rootcoder007/rmorie-bricklayer"
