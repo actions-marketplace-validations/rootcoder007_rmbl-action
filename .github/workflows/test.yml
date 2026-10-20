@@ -9,14 +9,14 @@ permissions:
 
 jobs:
   modes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         mode: [verify, report]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: Make a capsule with the package
@@ -39,10 +39,10 @@ jobs:
           cat rmbl-report.md
 
   cases:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: Make a plain and a signed capsule with the package
@@ -108,7 +108,9 @@ jobs:
           mode: drift
           allow-file: true
           json: drift.json
+          report: drift.md
       - run: |
+          cat drift.md
           test "${{ steps.drift.outputs.status }}" = drift
           test "${{ steps.drift.outputs.changed }}" = caps/one
           grep -q '"result": "drift"' drift.json
