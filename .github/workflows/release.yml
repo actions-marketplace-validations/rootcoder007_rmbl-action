@@ -1,0 +1,50 @@
+name: release
+
+# Run by hand from main: the test workflow runs on this commit first; only when every job is
+# green is vX.Y.Z created and the floating major tag (v1) moved to it. The release is a draft,
+# so the Marketplace box can be ticked when it is published.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, vX.Y.Z (the major tag vX is moved to it)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write  # push the tags and create the draft release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true  # the tag pushes below use the job's token
+      - name: Tag, move the major tag, draft the release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$VERSION" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be vX.Y.Z, not '$VERSION'"; exit 2; }
+          major="v${BASH_REMATCH[1]}"
+          test "$GITHUB_REF" = refs/heads/main || { echo "::error::release from main only, not $GITHUB_REF"; exit 2; }
+          if git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then
+            echo "::error::$VERSION exists already"; exit 2
+          fi
+          git tag "$VERSION" "$GITHUB_SHA"
+          git tag -f "$major" "$GITHUB_SHA"
+          git push origin "refs/tags/$VERSION"
+          git push -f origin "refs/tags/$major"
+          gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION"
+          echo "$VERSION and $major -> $GITHUB_SHA; draft release created" >> "$GITHUB_STEP_SUMMARY"
