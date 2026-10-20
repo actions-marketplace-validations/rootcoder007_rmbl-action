@@ -14,7 +14,7 @@ RLIB=$(R RHOME)/lib
 # libR and the libraries it pulls in travel with the binaries: the runner image has no R
 mkdir -p "$OUT/lib"
 RLD="-L$RLIB -Wl,-rpath,\$ORIGIN/lib -lR"
-FLAGS="-std=gnu++17 -I$PKG $RCPP $CXXFLAGS"
+FLAGS="-std=gnu++17 -DR_USE_C99_IN_CXX -I$PKG $RCPP $CXXFLAGS"
 $CXX $FLAGS fuzz_der.cpp -o "$OUT/fuzz_der" $LIB_FUZZING_ENGINE $RLD
 $CXX $FLAGS fuzz_strtod.cpp -o "$OUT/fuzz_strtod" $LIB_FUZZING_ENGINE $RLD
 $CXX $FLAGS fuzz_siu.cpp "$PKG/siu_parse.cpp" "$PKG/siu_resolve.cpp" -o "$OUT/fuzz_siu" $LIB_FUZZING_ENGINE
