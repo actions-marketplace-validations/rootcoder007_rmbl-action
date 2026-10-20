@@ -1,0 +1,171 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  modes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [verify, report]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: Make a capsule with the package
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
+            --entrypoint Rscript rmbl-local tests/make-capsule.R caps/one fixtures/source.csv /github/workspace
+      - uses: ./
+        id: rmbl
+        with:
+          path: caps
+          mode: ${{ matrix.mode }}
+      - name: Check outputs
+        run: |
+          test "${{ steps.rmbl.outputs.status }}" = ok
+          test "${{ steps.rmbl.outputs.verified }}" = 1
+          test "${{ steps.rmbl.outputs.failed }}" = 0
+          test -s "${{ steps.rmbl.outputs.report }}"
+          test -s "${{ steps.rmbl.outputs.json }}"
+          grep -q '| `caps/one` |' rmbl-report.md
+          cat rmbl-report.md
+
+  cases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: Make a plain and a signed capsule with the package
+        run: |
+          mk() {
+            docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
+              --entrypoint Rscript rmbl-local tests/make-capsule.R "$@"
+          }
+          mk caps/one fixtures/source.csv /github/workspace
+          mk signed/b fixtures/signed.csv /github/workspace bundle
+          echo "PUB=$(cat signed/b.pub)" >> "$GITHUB_ENV"
+          mkdir empty
+
+      - name: Empty directory
+        uses: ./
+        id: empty
+        with:
+          path: empty
+          report: empty.md
+      - run: |
+          test "${{ steps.empty.outputs.status }}" = ok
+          test "${{ steps.empty.outputs.verified }}" = 0
+          grep -q 'No manifests found under `empty`' empty.md
+
+      - name: Signed bundle, expected key
+        uses: ./
+        id: signed
+        with:
+          path: signed
+          public-key: ${{ env.PUB }}
+      - run: test "${{ steps.signed.outputs.status }}" = ok
+      - name: Signed bundle, another key
+        uses: ./
+        id: otherkey
+        continue-on-error: true
+        with:
+          path: signed
+          public-key: "00ff"
+      - run: |
+          test "${{ steps.otherkey.outcome }}" = failure
+          test "${{ steps.otherkey.outputs.status }}" = error
+
+      - name: Drift, source unchanged
+        uses: ./
+        id: same
+        with:
+          path: caps
+          mode: drift
+          allow-file: true
+      - run: |
+          test "${{ steps.same.outputs.status }}" = ok
+          test -z "${{ steps.same.outputs.changed }}"
+
+      - name: Rescale the source
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w --entrypoint Rscript rmbl-local -e \
+            'd <- read.csv("fixtures/source.csv"); d$value <- d$value * 3 + 2; write.csv(d, "fixtures/source.csv", row.names = FALSE)'
+      - name: Drift, fail-on error
+        uses: ./
+        id: drift
+        with:
+          path: caps
+          mode: drift
+          allow-file: true
+          json: drift.json
+      - run: |
+          test "${{ steps.drift.outputs.status }}" = drift
+          test "${{ steps.drift.outputs.changed }}" = caps/one
+          grep -q '"result": "drift"' drift.json
+      - name: Drift, fail-on drift
+        uses: ./
+        id: driftfail
+        continue-on-error: true
+        with:
+          path: caps
+          mode: drift
+          fail-on: drift
+          allow-file: true
+      - run: test "${{ steps.driftfail.outcome }}" = failure
+
+      - name: Refresh
+        uses: ./
+        id: refresh
+        with:
+          path: caps
+          mode: refresh
+          fail-on: never
+          allow-file: true
+      - run: |
+          test "${{ steps.refresh.outputs.changed }}" = caps/one
+          cmp caps/one/data.csv fixtures/source.csv
+          grep -q retrieved_utc caps/one/data_provenance.json
+      - name: Verify after refresh
+        uses: ./
+        id: after
+        with:
+          path: caps
+      - run: test "${{ steps.after.outputs.status }}" = ok
+
+      - name: Tamper with the data
+        run: echo "999,1,a" >> caps/one/data.csv
+      - name: Tampered, fail-on error
+        uses: ./
+        id: tampered
+        continue-on-error: true
+        with:
+          path: caps
+      - run: |
+          test "${{ steps.tampered.outcome }}" = failure
+          test "${{ steps.tampered.outputs.status }}" = error
+          test "${{ steps.tampered.outputs.failed }}" = 1
+      - name: Tampered, fail-on never
+        uses: ./
+        id: tamperednever
+        with:
+          path: caps
+          fail-on: never
+      - run: test "${{ steps.tamperednever.outputs.status }}" = error
+
+      - name: Unknown mode
+        uses: ./
+        id: badmode
+        continue-on-error: true
+        with:
+          mode: nonsense
+      - run: test "${{ steps.badmode.outcome }}" = failure
