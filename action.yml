@@ -89,7 +89,6 @@ runs:
     RMBL_PATH: ${{ inputs.path }}
     RMBL_MODE: ${{ inputs.mode }}
     RMBL_FAIL_ON: ${{ inputs.fail-on }}
-    RMBL_KEY: ${{ inputs.key }}
     RMBL_PUBLIC_KEY: ${{ inputs.public-key }}
     RMBL_REPORT: ${{ inputs.report }}
     RMBL_JSON: ${{ inputs.json }}

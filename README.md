@@ -434,6 +434,10 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `cache` | `false` | Keep fetched sources and data.rmorie.com tables in `.rmbl-cache/` (save and restore it with `actions/cache`). A cached source is used only when the live fetch fails, and the report says so. |
 | `allow-file` | `false` | Accept `file://` source URLs, for local mirrors and tests. |
 
+On GitHub the key comes only from the `key` input: a variable named `RMBL_KEY` in the job's
+or workflow's `env` never reaches the checks, so an empty `key` cannot sign with it. Run by
+hand with `docker run`, `-e RMBL_KEY=...` is the key.
+
 ## Outputs
 
 | Output | Meaning |

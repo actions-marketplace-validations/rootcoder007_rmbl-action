@@ -4,6 +4,9 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
+- The key is read only from the action's `key` input (`INPUT_KEY`): a job-level `RMBL_KEY` no
+  longer signs in `mode: sign` when `key` is empty. Mode `sign` signs through the package's
+  `cpsseal()`.
 - `check.R` is a thin shell over rmoriebricklayer 1.0.0: the checks, report, JSON,
   annotations, comment body and outputs come from `cpschk()`, `ghann()`, `ghcmt()` and
   `ghout()`. Inputs and outputs are unchanged. The JSON adds every check row (`checks`),

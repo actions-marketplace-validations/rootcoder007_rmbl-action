@@ -644,6 +644,40 @@ jobs:
           test "${{ steps.tampered.outputs.failed }}" = 1
           grep -F '| ✖ fail | bundle: file:data.csv |' tampered.md
 
+  key-input-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # a test value; a job env named like the action's variable must not stand in for the key input
+      CAPSULE_KEY: rmbl-action-test-secret
+      RMBL_KEY: rmbl-action-test-secret
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: A plain capsule
+        run: sh examples/any/produce.sh any/sh
+      - name: Sign with no key input, a job-level RMBL_KEY set
+        uses: ./
+        id: jobkey
+        continue-on-error: true
+        with:
+          path: any
+          mode: sign
+      - run: |
+          test "${{ steps.jobkey.outcome }}" = failure
+          test ! -e any/sh/capsule_bundle.json
+      - name: The key input still signs
+        uses: ./
+        id: inputkey
+        with:
+          path: any
+          mode: sign
+          key: ${{ env.CAPSULE_KEY }}
+      - run: |
+          test "${{ steps.inputkey.outputs.status }}" = ok
+          test -s any/sh/capsule_bundle.json
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

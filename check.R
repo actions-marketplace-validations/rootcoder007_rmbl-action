@@ -52,54 +52,20 @@ flags <- list(wayback = flag("RMBL_WAYBACK", "false"), cache = flag("RMBL_CACHE"
 cache_dir <- file.path(ws, ".rmbl-cache")
 if (flags$cache) options(rmoriebricklayer.dcache = cache_dir)  # the data.rmorie.com tables too
 
-# ---- mode sign: pin each provenance on its first run and write an hmac capsule_bundle.json with
-# cpsbndl(), so a project in any language only has to write the data and a plain provenance.
+# ---- mode sign: cpsseal() pins each provenance on its first run and writes an hmac
+# capsule_bundle.json, so a project in any language only writes the data and a plain provenance.
 # The capsules are then verified as in verify mode.
-str1 <- function(x) {
-  x <- unlist(x)
-  if (length(x) && !is.na(x[[1L]])) as.character(x[[1L]]) else NULL
-}
 if (mode == "sign") {
   scheme <- env("RMBL_SCHEME", "hmac")
-  overwrite <- flag("RMBL_OVERWRITE", "false")
   if (scheme != "hmac") usage("scheme must be hmac, not '%s'", scheme)
   if (!nzchar(key)) usage("mode sign needs key: the hmac secret, from a repository secret")
-  files <- list.files(root, pattern = "^data_provenance\\.json$", recursive = TRUE, full.names = TRUE)
-  files <- sub("^\\./", "", files)
-  files <- files[!grepl("(^|/)(\\.git|\\.rmbl-cache)/", files)]
-  glob <- env("RMBL_MANIFESTS")
-  if (nzchar(glob)) files <- files[grepl(utils::glob2rx(glob), files)]
-  sdirs <- sort(unique(dirname(files)))
-  if (!length(sdirs)) usage("mode sign found no data_provenance.json under '%s'", root)
-  have <- sdirs[file.exists(file.path(sdirs, "capsule_bundle.json"))]
-  if (length(have) && !overwrite) {
-    usage("capsule_bundle.json already exists in %s; set overwrite: true to sign again", paste(have, collapse = ", "))
-  }
-  for (d in sdirs) {
-    pf <- file.path(d, "data_provenance.json")
-    prov <- loadprov(pf)
-    if (is.null(prov$resource$sha256)) {
-      # the first pin, in the fields cpsrfrsh() writes (row_count_data_rows only when recorded)
-      fn <- if (is.null(str1(prov$resource$filename))) "" else str1(prov$resource$filename)
-      df <- file.path(d, fn)
-      if (!nzchar(fn) || grepl("^(/|~)|(^|/)\\.\\.(/|$)|^[A-Za-z]:", fn) || !file.exists(df) || dir.exists(df)) {
-        usage("%s: resource.filename must name the data file, relative to the capsule", pf)
-      }
-      dg <- sha256file(df)
-      if (is.list(prov$source)) prov$source$sha256 <- dg
-      prov$resource$sha256 <- dg
-      prov$resource$size_bytes <- file.size(df)
-      prov$resource$retrieved_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-      if (!is.null(prov$resource$row_count_data_rows)) {
-        prov$resource$row_count_data_rows <- nrow(utils::read.csv(df, check.names = FALSE))
-      }
-      writeLines(tojs(prov, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), pf)
-      cat(sprintf("pinned %s (sha256 %s)\n", pf, dg))
-    }
-    mf <- file.path(d, "manifest.json")
-    b <- cpsbndl(d, if (file.exists(mf)) loadprov(mf) else mkmnf(list(), env = FALSE), key)
-    cat(sprintf("signed %s: %d files, hmac key id %s\n", d, length(b$files), b$attestation$public))
-  }
+  s <- tryCatch(cpsseal(root, key, overwrite = flag("RMBL_OVERWRITE", "false"), glob = env("RMBL_MANIFESTS")),
+                error = function(e) {
+                  usage("%s", sub("pass overwrite = TRUE (rmbl sign --overwrite)", "set overwrite: true",
+                                  sub("^cpsseal: ", "", conditionMessage(e)), fixed = TRUE))
+                })
+  cat(sprintf("signed %s: %d files, hmac key id %s%s\n", s$capsule, s$files, s$public,
+              ifelse(s$pinned, " (provenance pinned)", "")), sep = "")
 }
 
 # an hmac secret is not a data-service key: it is never handed to data.rmorie.com
