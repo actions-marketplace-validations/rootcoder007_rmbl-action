@@ -17,6 +17,7 @@ R runs only inside the action's container.
 |---|---|---|---|
 | R | [`examples/r/make_capsule.R`](examples/r/make_capsule.R) (the package's `sha256file()` and `tojs()`) | `uses: rootcoder007/rmbl-action@v1` | the `docker run` command under [Local use](#local-use-without-github) |
 | Python | [`examples/python/make_capsule.py`](examples/python/make_capsule.py) (standard library only) | `uses: rootcoder007/rmbl-action@v1` | same |
+| Python, with [morie](https://github.com/rootcoder007/morie) | `morie capsule init`, then `morie capsule sign` for an hmac-signed bundle | `uses: rootcoder007/rmbl-action@v1` with `key` | `morie capsule verify <dir>`, or the `docker run` command |
 | C, C++ | [`examples/c/make_capsule.c`](examples/c/make_capsule.c) (C11, OpenSSL EVP; compiles as C++ too) | `uses: rootcoder007/rmbl-action@v1` | same |
 | Anything else | any SHA-256 and any JSON writer, as in the snippets below | `uses: rootcoder007/rmbl-action@v1` | same |
 
@@ -55,9 +56,41 @@ jq -n --arg f "$f" --arg sha "$(sha256sum "$f" | cut -d ' ' -f 1)" \
 The shell row count assumes no quoted field holds a newline. The test workflow runs both
 snippets as written here.
 
-What still needs R today: authoring signed bundles (`cpssign()`, `cpsbndl()`), results
-manifests with recorded cross-checks (`mkmnf()`, `recrd()`, `wrmnfjs()`), and the drift
-statistics themselves. Verifying all of them needs no R on your side: the action brings it.
+### Python authors and signs with morie
+
+[morie](https://github.com/rootcoder007/morie), the Python sibling of the R packages, writes
+capsules and signs them with `hmac`: HMAC-SHA-256 under a shared secret, in the bundle format
+`cpsbndl()` writes. It is not on PyPI at this version; install it from GitHub:
+
+```bash
+pip install "git+https://github.com/rootcoder007/morie@main"
+morie capsule init data/sample.csv --url https://example.org/sample.csv  # data/data_provenance.json
+export MORIE_CAPSULE_KEY=...      # the shared secret; never on the command line
+morie capsule sign data           # data/capsule_bundle.json, scheme hmac
+morie capsule verify data         # the same checks, in Python
+```
+
+`morie capsule sign` prints the bundle's key id, the attestation's `public` field:
+HMAC-SHA-256 of the string `public` under the secret. It names the key without revealing it.
+In CI, keep the secret in a repository secret and give it to the action as `key`; pin the key
+id with `public-key`:
+
+```yaml
+      - uses: rootcoder007/rmbl-action@v1
+        with:
+          path: data
+          key: ${{ secrets.MORIE_CAPSULE_KEY }}
+          public-key: ${{ vars.CAPSULE_KEY_ID }}
+```
+
+The action passes `key` to `cpsbndlvrf(key = )` (and so `cpschkatst(key = )`) only for a bundle
+whose attestation scheme is `hmac`; a wrong secret fails the `attestation:signature` row and
+the step. The test workflow's `example-python-signed` job runs these commands and both cases.
+
+What still needs R today: signing with the post-quantum schemes (ML-DSA, SLH-DSA, XMSS:
+`cpssign()`, `cpsbndl()`), and the drift statistics the action reports (`cpsdrft()`,
+`benfordtst()`; `morie capsule drift` computes its own). Verifying all of them needs no R on
+your side: the action brings it.
 
 ## The files
 
@@ -80,7 +113,7 @@ validation is a check row in the report (`schema: data_provenance.json`).
 
 | `mode` | What it does | Network |
 |---|---|---|
-| `verify` (default) | `vrfcps()` on each provenance: data present, SHA-256, size, row count, pinned schema (`valsch()`), results manifest, pinned script digest, not synthetic. `cpsbndlvrf()` on each bundle: every file's digest, no unlisted files, the signature, and the signing key when `public-key` is given. | none |
+| `verify` (default) | `vrfcps()` on each provenance: data present, SHA-256, size, row count, pinned schema (`valsch()`), results manifest, pinned script digest, not synthetic. `cpsbndlvrf()` on each bundle: every file's digest, no unlisted files, the signature (an `hmac` one with the secret in `key`), and the signing key when `public-key` is given. | none |
 | `drift` | `verify`, then downloads `resource.direct_url` (else `source.url`) with `fdl()`, falling back to the Wayback snapshot in `wayback.csv_snapshot` or one looked up. When the digest differs from the pin, `cpsdrft()` compares the pinned CSV with the new one per column (Kolmogorov-Smirnov or chi-square, population stability index, Jensen-Shannon divergence, added and removed columns), and `benfordtst()` screens the first digits of numeric columns. | yes |
 | `refresh` | `drift`, then for each changed source whose new data pass the pinned schema: writes the new data and updates `resource.sha256`, `size_bytes`, `row_count_data_rows` and `retrieved_utc` in the workspace, so a later step can open a pull request. With `wayback: true` the source is captured with `wbsave()` and `wayback.csv_snapshot` updated. A bundle is not re-signed (that needs your key); the report says so. | yes |
 | `report` | `verify`, but the step never fails. | none |
@@ -256,8 +289,8 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `base-ref` | the pull request's base | Branch or ref to compare manifests with. Needs the ref in the checkout (`fetch-depth: 0`). Empty outside pull requests. |
 | `comment` | `false` | `true`: create or update one comment on the pull request (needs `GITHUB_TOKEN` in the step env and `pull-requests: write`). `dry-run`: write the comment to `rmbl-comment.md` instead. |
 | `snapshot` | `false` | Look up each `http(s)` source's latest Internet Archive snapshot (`wbsnpurl()`, read-only). Offline or unarchived: a note, never a failure. |
-| `key` | | data.rmorie.com key, exported to the package as `MORIE_HOSTED_KEY`. Pass it from a secret. |
-| `public-key` | | Public key (hex) every bundle must be signed with. Without it a bundle is only checked to be consistent with the key it carries. |
+| `key` | | A secret, masked in the log; pass it from a repository secret. The data.rmorie.com key, exported to the package as `MORIE_HOSTED_KEY`; or the shared secret an `hmac` bundle is verified with (`cpsbndlvrf(key = )`). When any bundle is `hmac`-signed it is not exported to the data service. |
+| `public-key` | | Public key (hex) every bundle must be signed with; for an `hmac` bundle its key id. Without it a bundle is only checked to be consistent with the key it carries. |
 | `report` | `rmbl-report.md` | Markdown report path. |
 | `json` | `rmbl-results.json` | JSON results path. |
 | `manifests` | | Glob restricting the capsule files checked, matched against their path, e.g. `capsules/ontario/*`. `*` also matches `/`. |
@@ -316,9 +349,9 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /githu
 
 This is the action's `verify` mode: the exit status follows `fail-on` (`-e RMBL_FAIL_ON=...`),
 and the report and JSON land in `rmbl-report.md` and `rmbl-results.json`. Every input is an
-`RMBL_` variable (`RMBL_MODE`, `RMBL_PUBLIC_KEY`, `RMBL_ALLOW_FILE`, ...). The base image
-`ghcr.io/rootcoder007/rmorie-bricklayer` cannot do this by itself yet: it carries the
-package's source without installing it, and its `rmbl` command has no verify verb.
+`RMBL_` variable (`RMBL_MODE`, `RMBL_PUBLIC_KEY`, `RMBL_KEY`, `RMBL_ALLOW_FILE`, ...). The base
+image `ghcr.io/rootcoder007/rmorie-bricklayer` has the package installed and `rmbl` on its
+path, but `rmbl` has no verify verb: use this image for the checks.
 
 ## Versions
 
@@ -328,16 +361,18 @@ release; pin a full tag such as `@v1.0.0`, or a commit SHA, to freeze it.
 ## How the image is built
 
 `runs.using: docker` with this repository's `Dockerfile`: it starts from
-`ghcr.io/rootcoder007/rmorie-bricklayer:latest` (R, the analysis packages and the package
-source), installs rmoriebricklayer from that source when the image does not already have it
-(about a minute), then adds `entrypoint.sh`, `check.R` and `spec/`. The checks are calls to
-the package's exported functions; nothing else is installed.
+`ghcr.io/rootcoder007/rmorie-bricklayer:latest` (R, the analysis packages and
+rmoriebricklayer installed, rebuilt from the package's main branch) and adds `entrypoint.sh`,
+`check.R` and `spec/`. The checks are calls to the package's exported functions; nothing
+else is installed.
 
 ## Security
 
 - `key` is passed to the container only as an environment variable, masked in the log,
   and never written to a file. The package sends it only to the data service named in its
-  signed services document (data.rmorie.com).
+  signed services document (data.rmorie.com), and not at all when a bundle is `hmac`-signed:
+  then it is the bundle's shared secret and is used only to verify the signature. Keep an
+  hmac secret in a repository secret; anyone who has it can sign bundles that verify.
 - `GITHUB_TOKEN`, when given for `comment`, is used only for the pull request's comments
   API, from a header file readable by the container's user and deleted after use.
 - `verify` and `report` make no network requests except `snapshot: true` (archive.org's

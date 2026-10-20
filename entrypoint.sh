@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# rmbl-action entrypoint: hand the data-service key to the package, then run the checks.
+# rmbl-action entrypoint: mask the key, hand it to the package, then run the checks.
 set -euo pipefail
 
 if [ -n "${RMBL_KEY:-}" ]; then
   echo "::add-mask::${RMBL_KEY}"
+  # the data-service key; check.R also reads RMBL_KEY as the hmac secret of a bundle, and drops
+  # MORIE_HOSTED_KEY when a bundle is hmac-signed
   export MORIE_HOSTED_KEY="${RMBL_KEY}"
 fi
-unset RMBL_KEY
 
 # the workspace belongs to the runner's user, not this container's: let git read it
 # (the manifest comparison runs `git show <base>:<path>`)

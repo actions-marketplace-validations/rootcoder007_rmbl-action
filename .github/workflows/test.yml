@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build the image
         run: docker build -t rmbl-local .
+      - name: The base image has the package installed and rmbl on PATH
+        run: docker run --rm --entrypoint rmbl rmbl-local version
       - name: Make a capsule with the package
         run: |
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
@@ -363,6 +365,54 @@ jobs:
         with:
           name: capsule-c
           path: out/c/data_provenance.json
+
+  example-python-signed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # a test value; in a real workflow this comes from a repository secret
+      MORIE_CAPSULE_KEY: rmbl-action-test-secret
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install morie from GitHub main
+        run: pip install "git+https://github.com/rootcoder007/morie@main"
+      - name: Author and sign the capsule with morie (hmac)
+        run: |
+          mkdir -p signed/py && cp examples/data/sample.csv signed/py/
+          morie capsule init signed/py/sample.csv --url https://example.org/sample.csv
+          morie capsule sign signed/py
+          morie capsule verify signed/py
+          echo "KID=$(python3 -c 'import hashlib, hmac, os; print(hmac.new(os.environ["MORIE_CAPSULE_KEY"].encode(), b"public", hashlib.sha256).hexdigest())')" >> "$GITHUB_ENV"
+      - name: Verify with the shared key
+        uses: ./
+        id: signed
+        with:
+          path: signed
+          key: ${{ env.MORIE_CAPSULE_KEY }}
+          public-key: ${{ env.KID }}
+          report: signed.md
+      - run: |
+          cat signed.md
+          test "${{ steps.signed.outputs.status }}" = ok
+          test "${{ steps.signed.outputs.verified }}" = 1
+          grep -q '| ✔ | bundle: attestation:key_as_expected | the attestation carries the expected key |' signed.md
+          grep -q '| ✔ | bundle: attestation:signature | - |' signed.md
+      - name: Verify with a wrong key
+        uses: ./
+        id: wrongkey
+        continue-on-error: true
+        with:
+          path: signed
+          key: not-the-signing-secret
+          public-key: ${{ env.KID }}
+          report: wrongkey.md
+      - run: |
+          test "${{ steps.wrongkey.outcome }}" = failure
+          test "${{ steps.wrongkey.outputs.status }}" = error
+          grep -q '| ✖ | bundle: attestation:signature | the key given is not the key the attestation names |' wrongkey.md
 
   examples-agree:
     needs: [example-r, example-python, example-c]

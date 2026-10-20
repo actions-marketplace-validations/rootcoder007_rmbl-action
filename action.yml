@@ -31,11 +31,11 @@ inputs:
     description: "true: look up the latest Internet Archive snapshot of each http(s) source (wbsnpurl(), read-only, one request per capsule)."
     default: "false"
   key:
-    description: "Optional data.rmorie.com key, exported to the package as MORIE_HOSTED_KEY. Pass it from a secret."
+    description: "Optional secret, masked in the log: the data.rmorie.com key (exported as MORIE_HOSTED_KEY), or the shared secret an hmac-signed capsule_bundle.json is verified with (cpsbndlvrf(key = )); with an hmac bundle present it is not exported to the data service. Pass it from a repository secret."
     required: false
     default: ""
   public-key:
-    description: "Optional public key (hex) every capsule_bundle.json must be signed with."
+    description: "Optional public key (hex) every capsule_bundle.json must be signed with; for an hmac bundle, its key id (HMAC-SHA-256 of \"public\" under the secret)."
     required: false
     default: ""
   report:

@@ -32,6 +32,9 @@ report_path <- env("RMBL_REPORT", "rmbl-report.md")
 json_path <- env("RMBL_JSON", "rmbl-results.json")
 glob <- env("RMBL_MANIFESTS", "")
 pubkey <- env("RMBL_PUBLIC_KEY", "")
+# `key`: the data.rmorie.com key, or the shared secret of hmac bundles (masked by entrypoint.sh)
+key <- Sys.getenv("RMBL_KEY")
+Sys.unsetenv("RMBL_KEY")
 wayback <- flag("RMBL_WAYBACK", "false")
 use_cache <- flag("RMBL_CACHE", "false")
 allow_file <- flag("RMBL_ALLOW_FILE", "false")
@@ -76,6 +79,10 @@ str1 <- function(x) {
   if (length(x) && !is.na(x[[1L]])) as.character(x[[1L]]) else NULL
 }
 fmt <- function(x) formatC(x, digits = 3, format = "g")
+scheme_of <- function(f) tryCatch(str1(suppressWarnings(cpsbndlrd(f))$attestation$scheme) %||% "", error = function(e) "")
+schemes <- vapply(files[basename(files) == "capsule_bundle.json"], scheme_of, "")
+# an hmac secret is not a data-service key: it is never handed to data.rmorie.com
+if (any(schemes == "hmac")) Sys.unsetenv("MORIE_HOSTED_KEY")
 failed_rows <- function(chk, prefix = "") {
   bad <- chk$checks[!chk$checks$ok, , drop = FALSE]
   c(if (nrow(bad)) paste0(prefix, bad$check, ": ", bad$detail),
@@ -308,7 +315,9 @@ check_capsule <- function(d) {
     }
   }
   if (file.exists(bundle_file)) {
-    bchk <- cpsbndlvrf(bundle_file, d, keyexp = if (nzchar(pubkey)) pubkey)
+    bnd <- cpsbndlrd(bundle_file)
+    hmac <- identical(str1(bnd$attestation$scheme), "hmac")
+    bchk <- cpsbndlvrf(bnd, d, keyexp = if (nzchar(pubkey)) pubkey, key = if (hmac && nzchar(key)) key)
     keep_rows(bchk, "bundle", bundle_file)
     res$checks_passed <- res$checks_passed + sum(bchk$checks$ok)
     res$checks_total <- res$checks_total + nrow(bchk$checks)
