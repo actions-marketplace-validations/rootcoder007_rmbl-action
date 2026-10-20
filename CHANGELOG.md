@@ -2,7 +2,7 @@
 
 Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
-## Unreleased
+## 1.0.0 (2026-10-20)
 
 - Base image bumped to the rmoriebricklayer 1.0.0 release build (4d4229e0): XMSS from `rmbl sign`, the 0.5.x name aliases, drift report and dashboard.
 - ClusterFuzzLite runs the package's libFuzzer targets on pull requests and weekly.
