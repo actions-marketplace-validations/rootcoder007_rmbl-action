@@ -4,6 +4,7 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
+- ClusterFuzzLite runs the package's libFuzzer targets on pull requests and weekly.
 - The key is read only from the action's `key` input (`INPUT_KEY`): a job-level `RMBL_KEY` no
   longer signs in `mode: sign` when `key` is empty. Mode `sign` signs through the package's
   `cpsseal()`.

@@ -536,6 +536,16 @@ came from; when the package's image is rebuilt, Dependabot (`package-ecosystem: 
 opens a pull request with the new digest, the test workflow runs on it, and a release moves
 `v1` to it.
 
+## Fuzzing
+
+ClusterFuzzLite (`.clusterfuzzlite/`, workflow `fuzz`) builds the package's four libFuzzer
+targets at the commit the base image was made from and runs them with AddressSanitizer and
+UndefinedBehaviorSanitizer: the DER parser and RSA arithmetic behind bundle signatures, the URL
+policy and redirect rule every source passes, the decimal-to-double reader checked bit for bit
+against libc, and the SIU report parsers. Five minutes on every pull request against the code
+the change touches, thirty minutes weekly to grow the corpus; a crash becomes a code-scanning
+alert.
+
 ## Security
 
 Report a vulnerability privately: [`.github/SECURITY.md`](.github/SECURITY.md).
