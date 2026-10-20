@@ -444,6 +444,201 @@ jobs:
           cmp r.json python.json
           cmp r.json c.json
 
+  vectors:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: Re-derive the test vectors with the package and compare them byte for byte
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w --entrypoint Rscript rmbl-local \
+            spec/vectors/make.R vectors-out
+          diff -r --exclude=make.R spec/vectors vectors-out
+          sha256sum spec/vectors/payload.canon.json | grep -q "^$(awk '$1 == "payload_digest" {print $2}' spec/vectors/values.txt) "
+
+  example-native:
+    name: example-native (${{ matrix.lang }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [c, cpp, go, rust, zig, java, node, typescript, bun, lua, sql]
+    env:
+      EX: ${{ matrix.lang }}
+      # a test value; in a real workflow this comes from a repository secret
+      RMBL_KEY: rmbl-action-test-secret
+      KEY_ID: da884d9bd335b6a01e5354ef0f0f1f3df9a7a7ee8c2c00c7a893e47ed9abd053
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: matrix.lang == 'c' || matrix.lang == 'cpp'
+        run: test -f /usr/include/openssl/evp.h || (sudo apt-get update && sudo apt-get install -y libssl-dev)
+      - if: matrix.lang == 'sql'
+        run: command -v sqlite3 || (sudo apt-get update && sudo apt-get install -y sqlite3)
+      - if: matrix.lang == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - if: matrix.lang == 'rust'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - if: matrix.lang == 'zig'
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.14.1
+          use-cache: false
+      - if: matrix.lang == 'java'
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: matrix.lang == 'node' || matrix.lang == 'typescript'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - if: matrix.lang == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+          no-cache: true
+      - if: matrix.lang == 'lua'
+        uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
+        with:
+          luaVersion: "5.4"
+          buildCache: false
+      - name: The producer writes the test vectors byte for byte
+        env:
+          RMBL_UTC: "2026-01-01T00:00:00Z"
+          RMBL_NOTE_FILE: spec/vectors/note.txt
+        run: |
+          sh "examples/$EX/run.sh" "vec/$EX"
+          for f in data.csv data_provenance.json capsule_bundle.json; do cmp "spec/vectors/capsule/$f" "vec/$EX/$f"; done
+      - name: The producer writes a capsule now
+        run: sh "examples/$EX/run.sh" "out/$EX"
+      - uses: ./
+        id: rmbl
+        with:
+          path: out
+          key: ${{ env.RMBL_KEY }}
+          public-key: ${{ env.KEY_ID }}
+          report: native.md
+      - run: |
+          cat native.md
+          test "${{ steps.rmbl.outputs.status }}" = ok
+          test "${{ steps.rmbl.outputs.verified }}" = 1
+          grep -qF '| ✔ pass | bundle: attestation:signature | - |' native.md
+          grep -qF '| ✔ pass | bundle: no_unlisted_files | - |' native.md
+      - name: Flip one byte of the data
+        run: printf 7 | dd of="out/$EX/data.csv" bs=1 seek=4 count=1 conv=notrunc
+      - uses: ./
+        id: tampered
+        continue-on-error: true
+        with:
+          path: out
+          key: ${{ env.RMBL_KEY }}
+          public-key: ${{ env.KEY_ID }}
+          report: tampered.md
+      - run: |
+          test "${{ steps.tampered.outcome }}" = failure
+          test "${{ steps.tampered.outputs.status }}" = error
+          grep -F '| ✖ fail | bundle: file:data.csv |' tampered.md
+          grep -F '| ✖ fail | data_sha256 |' tampered.md
+
+  example-sign:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # a test value; in a real workflow this comes from a repository secret
+      RMBL_KEY: rmbl-action-test-secret
+      KEY_ID: da884d9bd335b6a01e5354ef0f0f1f3df9a7a7ee8c2c00c7a893e47ed9abd053
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Two producers with no crypto and no JSON library (POSIX sh, awk)
+        run: |
+          sh examples/any/produce.sh any/sh
+          mkdir -p any/awk && awk -v dir=any/awk -f examples/any/produce.awk
+      - name: Sign with the action
+        uses: ./
+        id: sign
+        with:
+          path: any
+          mode: sign
+          key: ${{ env.RMBL_KEY }}
+          report: sign.md
+      - run: |
+          cat sign.md
+          test "${{ steps.sign.outputs.status }}" = ok
+          test "${{ steps.sign.outputs.verified }}" = 2
+          for d in any/sh any/awk; do
+            test -s "$d/capsule_bundle.json"
+            jq -e '.resource.sha256 | test("^[0-9a-f]{64}$")' "$d/data_provenance.json"
+            jq -e --arg k "$KEY_ID" '.attestation.public == $k and .attestation.scheme == "hmac"' "$d/capsule_bundle.json"
+          done
+          jq -e '.resource.row_count_data_rows == 3' any/awk/data_provenance.json
+      - name: Verify, pinning the key id
+        uses: ./
+        id: verify
+        with:
+          path: any
+          key: ${{ env.RMBL_KEY }}
+          public-key: ${{ env.KEY_ID }}
+          report: verify.md
+      - run: |
+          test "${{ steps.verify.outputs.status }}" = ok
+          test "$(grep -cF '| ✔ pass | bundle: attestation:signature | - |' verify.md)" = 2
+      - name: Signing again without overwrite
+        uses: ./
+        id: again
+        continue-on-error: true
+        with:
+          path: any
+          mode: sign
+          key: ${{ env.RMBL_KEY }}
+      - run: test "${{ steps.again.outcome }}" = failure
+      - name: Signing again with overwrite
+        uses: ./
+        id: overwrite
+        with:
+          path: any
+          mode: sign
+          key: ${{ env.RMBL_KEY }}
+          overwrite: true
+      - run: test "${{ steps.overwrite.outputs.status }}" = ok
+      - name: Signing without a key
+        uses: ./
+        id: nokey
+        continue-on-error: true
+        with:
+          path: any
+          mode: sign
+          overwrite: true
+      - run: test "${{ steps.nokey.outcome }}" = failure
+      - name: Flip one byte of the data
+        run: printf 7 | dd of=any/sh/data.csv bs=1 seek=4 count=1 conv=notrunc
+      - uses: ./
+        id: tampered
+        continue-on-error: true
+        with:
+          path: any
+          key: ${{ env.RMBL_KEY }}
+          public-key: ${{ env.KEY_ID }}
+          report: tampered.md
+      - run: |
+          test "${{ steps.tampered.outcome }}" = failure
+          test "${{ steps.tampered.outputs.failed }}" = 1
+          grep -F '| ✖ fail | bundle: file:data.csv |' tampered.md
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

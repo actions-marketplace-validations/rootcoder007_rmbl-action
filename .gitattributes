@@ -1,0 +1,2 @@
+# the test vectors are compared byte for byte: no line-ending conversion
+spec/vectors/** -text

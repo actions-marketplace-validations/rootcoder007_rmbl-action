@@ -45,8 +45,8 @@ psi_warn <- number("RMBL_PSI_WARN", "0.1")
 psi_fail <- number("RMBL_PSI_FAIL", "0.25")
 event <- env("GITHUB_EVENT_NAME")
 base_ref <- env("RMBL_BASE_REF", if (event %in% c("pull_request", "pull_request_target")) env("GITHUB_BASE_REF") else "")
-if (!mode %in% c("verify", "drift", "refresh", "report")) {
-  usage("mode must be verify, drift, refresh or report, not '%s'", mode)
+if (!mode %in% c("verify", "drift", "refresh", "report", "sign")) {
+  usage("mode must be verify, drift, refresh, report or sign, not '%s'", mode)
 }
 if (!fail_on %in% c("warn", "drift", "error", "never")) {
   usage("fail-on must be warn, drift, error or never, not '%s'", fail_on)
@@ -79,6 +79,49 @@ str1 <- function(x) {
   if (length(x) && !is.na(x[[1L]])) as.character(x[[1L]]) else NULL
 }
 fmt <- function(x) formatC(x, digits = 3, format = "g")
+
+# ---- mode sign: pin each provenance on its first run and write an hmac capsule_bundle.json with
+# cpsbndl(), so a project in any language only has to write the data and a plain provenance.
+# The capsules are then verified as in verify mode.
+if (mode == "sign") {
+  scheme <- env("RMBL_SCHEME", "hmac")
+  overwrite <- flag("RMBL_OVERWRITE", "false")
+  if (scheme != "hmac") usage("scheme must be hmac, not '%s'", scheme)
+  if (!nzchar(key)) usage("mode sign needs key: the hmac secret, from a repository secret")
+  sdirs <- sort(unique(dirname(files[basename(files) == "data_provenance.json"])))
+  if (!length(sdirs)) usage("mode sign found no data_provenance.json under '%s'", root)
+  have <- sdirs[file.exists(file.path(sdirs, "capsule_bundle.json"))]
+  if (length(have) && !overwrite) {
+    usage("capsule_bundle.json already exists in %s; set overwrite: true to sign again", paste(have, collapse = ", "))
+  }
+  for (d in sdirs) {
+    pf <- file.path(d, "data_provenance.json")
+    prov <- loadprov(pf)
+    if (is.null(prov$resource$sha256)) {
+      # the first pin, in the fields cpsrfrsh() writes (row_count_data_rows only when recorded)
+      fn <- str1(prov$resource$filename) %||% ""
+      df <- file.path(d, fn)
+      if (!nzchar(fn) || grepl("^(/|~)|(^|/)\\.\\.(/|$)|^[A-Za-z]:", fn) || !file.exists(df) || dir.exists(df)) {
+        usage("%s: resource.filename must name the data file, relative to the capsule", pf)
+      }
+      dg <- sha256file(df)
+      if (is.list(prov$source)) prov$source$sha256 <- dg
+      prov$resource$sha256 <- dg
+      prov$resource$size_bytes <- file.size(df)
+      prov$resource$retrieved_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+      if (!is.null(prov$resource$row_count_data_rows)) {
+        prov$resource$row_count_data_rows <- nrow(utils::read.csv(df, check.names = FALSE))
+      }
+      writeLines(tojs(prov, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA), pf)
+      cat(sprintf("pinned %s (sha256 %s)\n", pf, dg))
+    }
+    mf <- file.path(d, "manifest.json")
+    b <- cpsbndl(d, if (file.exists(mf)) loadprov(mf) else mkmnf(list(), env = FALSE), key)
+    cat(sprintf("signed %s: %d files, hmac key id %s\n", d, length(b$files), b$attestation$public))
+  }
+  files <- unique(c(files, file.path(sdirs, "capsule_bundle.json")))
+}
+
 scheme_of <- function(f) tryCatch(str1(suppressWarnings(cpsbndlrd(f))$attestation$scheme) %||% "", error = function(e) "")
 schemes <- vapply(files[basename(files) == "capsule_bundle.json"], scheme_of, "")
 # an hmac secret is not a data-service key: it is never handed to data.rmorie.com

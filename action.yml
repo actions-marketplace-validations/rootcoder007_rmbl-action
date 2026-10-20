@@ -10,7 +10,7 @@ inputs:
     description: "Directory searched (recursively) for capsules: folders holding data_provenance.json or capsule_bundle.json."
     default: "."
   mode:
-    description: "verify (digests, schema, bundle signatures), drift (also re-fetch each source and run the drift battery), refresh (drift, then write changed data and provenance back), or report (verify without failing)."
+    description: "verify (digests, schema, bundle signatures), drift (also re-fetch each source and run the drift battery), refresh (drift, then write changed data and provenance back), report (verify without failing), or sign (pin each data_provenance.json on its first run, write an hmac capsule_bundle.json with key, then verify)."
     default: "verify"
   fail-on:
     description: "error (fail when a capsule does not verify or cannot be fetched), drift (also on drift above psi-fail), warn (also on a column past psi-warn), or never."
@@ -31,13 +31,19 @@ inputs:
     description: "true: look up the latest Internet Archive snapshot of each http(s) source (wbsnpurl(), read-only, one request per capsule)."
     default: "false"
   key:
-    description: "Optional secret, masked in the log: the data.rmorie.com key (exported as MORIE_HOSTED_KEY), or the shared secret an hmac-signed capsule_bundle.json is verified with (cpsbndlvrf(key = )); with an hmac bundle present it is not exported to the data service. Pass it from a repository secret."
+    description: "Optional secret, masked in the log: the data.rmorie.com key (exported as MORIE_HOSTED_KEY), or the shared secret an hmac-signed capsule_bundle.json is verified with (cpsbndlvrf(key = )) and, in mode sign, signed with (cpsbndl()); with an hmac bundle present it is not exported to the data service. Pass it from a repository secret."
     required: false
     default: ""
   public-key:
     description: "Optional public key (hex) every capsule_bundle.json must be signed with; for an hmac bundle, its key id (HMAC-SHA-256 of \"public\" under the secret)."
     required: false
     default: ""
+  scheme:
+    description: "Signature scheme of mode sign; hmac (HMAC-SHA-256 under key) is the one supported."
+    default: "hmac"
+  overwrite:
+    description: "true: mode sign replaces an existing capsule_bundle.json; false: it fails instead."
+    default: "false"
   report:
     description: "Path of the Markdown report."
     default: "rmbl-report.md"
@@ -96,3 +102,5 @@ runs:
     RMBL_BASE_REF: ${{ inputs.base-ref }}
     RMBL_COMMENT: ${{ inputs.comment }}
     RMBL_SNAPSHOT: ${{ inputs.snapshot }}
+    RMBL_SCHEME: ${{ inputs.scheme }}
+    RMBL_OVERWRITE: ${{ inputs.overwrite }}

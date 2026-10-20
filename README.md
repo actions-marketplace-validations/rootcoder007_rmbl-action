@@ -35,13 +35,85 @@ A sample of the report it writes to the job summary is in
 
 ## Any language
 
-| Your project | Author a capsule | Verify in CI | Verify locally |
+The action is language-independent: it reads files, not code. A capsule is a data file, a
+JSON provenance record and optionally a JSON bundle; what is checked is their bytes (SHA-256
+digests) and their JSON values, and the signature is HMAC-SHA-256, which every platform has.
+R runs only inside the action's container. So a project in any language takes one of two
+paths, both tested in CI:
+
+1. **Any language: write two files, let the action sign.** The program writes the data
+   file and a plain `data_provenance.json` naming it; `mode: sign` pins the provenance and
+   writes the signed `capsule_bundle.json` in CI with your key. Nothing but file output is
+   needed in the producing language, which is what makes "every language" true.
+2. **Native signing.** The program writes the pinned provenance and the signed bundle
+   itself, following [`docs/bundle-format.md`](docs/bundle-format.md): the files, the
+   canonical JSON form and the hmac attestation, byte by byte, with test vectors in
+   [`spec/vectors/`](spec/vectors). Every native example below writes those vectors byte
+   for byte in CI.
+
+### Any language: write two files, let the action sign
+
+```yaml
+permissions:
+  contents: read
+jobs:
+  capsules:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: ./produce capsules/squares  # your program, in whatever language: data.csv + data_provenance.json
+      - uses: rootcoder007/rmbl-action@v1
+        with:
+          path: capsules
+          mode: sign
+          key: ${{ secrets.CAPSULE_KEY }}
+      - uses: rootcoder007/rmbl-action@v1
+        with:
+          path: capsules
+          key: ${{ secrets.CAPSULE_KEY }}
+          public-key: ${{ vars.CAPSULE_KEY_ID }}  # the key id mode sign prints
+```
+
+The plain provenance needs only `{"resource": {"filename": "data.csv"}}`. `mode: sign` fills
+`resource.sha256`, `size_bytes` and `retrieved_utc` when `resource.sha256` is absent, signs
+every file of each capsule directory, fails when a bundle is already there unless
+`overwrite: true`, and then verifies. Commit the pinned files, or upload them as an
+artifact. See [`examples/any`](examples/any) (POSIX sh and awk, the `example-sign` job) and
+[`examples/wolfram`](examples/wolfram).
+
+### Per language
+
+| Language | Example and recipe | Libraries | Tested in CI |
 |---|---|---|---|
-| R | [`examples/r/make_capsule.R`](examples/r/make_capsule.R) (the package's `sha256file()` and `tojs()`) | `uses: rootcoder007/rmbl-action@v1` | the `docker run` command under [Local use](#local-use-without-github) |
-| Python | [`examples/python/make_capsule.py`](examples/python/make_capsule.py) (standard library only) | `uses: rootcoder007/rmbl-action@v1` | same |
-| Python, with [morie](https://github.com/rootcoder007/morie) | `morie capsule init`, then `morie capsule sign` for an hmac-signed bundle | `uses: rootcoder007/rmbl-action@v1` with `key` | `morie capsule verify <dir>`, or the `docker run` command |
-| C, C++ | [`examples/c/make_capsule.c`](examples/c/make_capsule.c) (C11, OpenSSL EVP; compiles as C++ too) | `uses: rootcoder007/rmbl-action@v1` | same |
-| Anything else | any SHA-256 and any JSON writer, as in the snippets below | `uses: rootcoder007/rmbl-action@v1` | same |
+| any | [`examples/any`](examples/any): write two files, `mode: sign` | none | `example-sign` (POSIX sh, awk) |
+| Wolfram Language | [`examples/wolfram`](examples/wolfram): `Export` the two files, `mode: sign` | none | no: the Wolfram Engine needs an activated licence the runner does not have |
+| C | [`examples/c`](examples/c) | OpenSSL EVP, JSON by hand | `example-native (c)`, `example-c` |
+| C++ | [`examples/cpp`](examples/cpp) | OpenSSL EVP, JSON by hand | `example-native (cpp)` |
+| Go | [`examples/go`](examples/go) | standard library; own string writer (`encoding/json` escapes U+2028 and `<>&`) | `example-native (go)` |
+| Rust | [`examples/rust`](examples/rust) | `sha2`, `hmac`, `serde_json` (`Cargo.lock`) | `example-native (rust)` |
+| Zig | [`examples/zig`](examples/zig) | `std.crypto` (Zig 0.14), JSON by hand | `example-native (zig)` |
+| Java | [`examples/java`](examples/java) | `java.security`, `javax.crypto`, a small canonical writer | `example-native (java)` |
+| Node | [`examples/node`](examples/node) | `node:crypto`, sorted-key `JSON.stringify` | `example-native (node)` |
+| TypeScript | [`examples/typescript`](examples/typescript) | `node:crypto`, run by Node's type stripping | `example-native (typescript)` |
+| Bun | [`examples/bun`](examples/bun) | `node:crypto` as Bun implements it | `example-native (bun)` |
+| Lua | [`examples/lua`](examples/lua) | none: SHA-256 and HMAC in plain Lua 5.4 | `example-native (lua)` |
+| SQL (SQLite, DuckDB) | [`examples/sql`](examples/sql): the query writes the CSV, `sh` + `openssl dgst -hmac` signs | `sqlite3`, OpenSSL CLI | `example-native (sql)` |
+| Python | [`examples/python/make_capsule.py`](examples/python/make_capsule.py) (provenance, standard library); [morie](https://github.com/rootcoder007/morie) signs | standard library; morie | `example-python`, `example-python-signed` |
+| R | [`examples/r/make_capsule.R`](examples/r/make_capsule.R) (provenance); `cpsbndl()` signs | rmoriebricklayer | `example-r` |
+
+Each native job writes the vectors of `spec/vectors/` and compares them byte for byte, runs
+the action on a fresh capsule with `key` and `public-key` (status ok, the
+`attestation:signature` row passing), then flips one byte of the data and checks that the
+step fails on the `file:data.csv` and `data_sha256` rows. The `vectors` job re-derives
+`spec/vectors/` with the package and diffs it.
+
+### Provenance only
+
+The R, Python and C `make_capsule` examples write only the provenance, which `verify` checks
+without a bundle (verify locally with the `docker run` command under
+[Local use](#local-use-without-github)).
 
 Each example takes `<csv path> <source url>` and writes `data_provenance.json` next to the
 CSV with `name`, `source.url`, `source.retrieved` and `resource.filename`, `sha256`,
@@ -139,6 +211,7 @@ validation is a check row in the report (`schema: data_provenance.json`).
 | `drift` | `verify`, then downloads `resource.direct_url` (else `source.url`) with `fdl()`, falling back to the Wayback snapshot in `wayback.csv_snapshot` or one looked up. When the digest differs from the pin, `cpsdrft()` compares the pinned CSV with the new one per column (Kolmogorov-Smirnov or chi-square, population stability index, Jensen-Shannon divergence, added and removed columns), and `benfordtst()` screens the first digits of numeric columns. | yes |
 | `refresh` | `drift`, then for each changed source whose new data pass the pinned schema: writes the new data and updates `resource.sha256`, `size_bytes`, `row_count_data_rows` and `retrieved_utc` in the workspace, so a later step can open a pull request. With `wayback: true` the source is captured with `wbsave()` and `wayback.csv_snapshot` updated. A bundle is not re-signed (that needs your key); the report says so. | yes |
 | `report` | `verify`, but the step never fails. | none |
+| `sign` | For each directory holding `data_provenance.json`: pins it on its first run (`resource.sha256`, `size_bytes`, `retrieved_utc`, `source.sha256`; `row_count_data_rows` when recorded), writes `capsule_bundle.json` with `cpsbndl()` under `key` (scheme `hmac`, over every file of the directory and `manifest.json`'s digest, or the empty manifest's), then `verify`. Fails when a bundle exists unless `overwrite: true`, or without `key`. | none |
 
 In every mode, with `base-ref` set (the default on pull requests) each manifest is compared
 with the base branch's copy, and with `snapshot: true` the latest Internet Archive snapshot
@@ -342,15 +415,17 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | Input | Default | Meaning |
 |---|---|---|
 | `path` | `.` | Directory searched recursively for `data_provenance.json` and `capsule_bundle.json`. `.git` and `.rmbl-cache` are skipped. |
-| `mode` | `verify` | `verify`, `drift`, `refresh` or `report`. |
+| `mode` | `verify` | `verify`, `drift`, `refresh`, `report` or `sign`. |
 | `fail-on` | `error` | `error`, `drift`, `warn` or `never` (see below). |
 | `psi-warn` | `0.1` | PSI above which a changed column is a warning. |
 | `psi-fail` | `0.25` | PSI above which a column the package flags is drift; passed to `cpsdrft()` as `psithr`. The defaults are the bands `drftpsi()` documents: below 0.1 stable, 0.1 to 0.25 worth a look, above 0.25 material. |
 | `base-ref` | the pull request's base | Branch or ref to compare manifests with. Needs the ref in the checkout (`fetch-depth: 0`). Empty outside pull requests. |
 | `comment` | `false` | `true`: create or update one comment on the pull request (needs `GITHUB_TOKEN` in the step env and `pull-requests: write`). `dry-run`: write the comment to `rmbl-comment.md` instead. |
 | `snapshot` | `false` | Look up each `http(s)` source's latest Internet Archive snapshot (`wbsnpurl()`, read-only). Offline or unarchived: a note, never a failure. |
-| `key` | | A secret, masked in the log; pass it from a repository secret. The data.rmorie.com key, exported to the package as `MORIE_HOSTED_KEY`; or the shared secret an `hmac` bundle is verified with (`cpsbndlvrf(key = )`). When any bundle is `hmac`-signed it is not exported to the data service. |
+| `key` | | A secret, masked in the log; pass it from a repository secret. The data.rmorie.com key, exported to the package as `MORIE_HOSTED_KEY`; or the shared secret an `hmac` bundle is verified with (`cpsbndlvrf(key = )`) and, in `mode: sign`, signed with (`cpsbndl()`). When any bundle is `hmac`-signed it is not exported to the data service. |
 | `public-key` | | Public key (hex) every bundle must be signed with; for an `hmac` bundle its key id. Without it a bundle is only checked to be consistent with the key it carries. |
+| `scheme` | `hmac` | Signature scheme of `mode: sign`; `hmac` is the one supported (the post-quantum schemes need a key file, so sign those with `cpsbndl()` in R). |
+| `overwrite` | `false` | `true`: `mode: sign` replaces an existing `capsule_bundle.json`. |
 | `report` | `rmbl-report.md` | Markdown report path. |
 | `json` | `rmbl-results.json` | JSON results path. |
 | `manifests` | | Glob restricting the capsule files checked, matched against their path, e.g. `capsules/ontario/*`. `*` also matches `/`. |
@@ -404,7 +479,7 @@ the failure and add `continue-on-error: true` to the step: later steps then read
 
 | Feature | Token permissions |
 |---|---|
-| `verify`, `drift`, `report`, the job summary, annotations | `contents: read` |
+| `verify`, `drift`, `report`, `sign`, the job summary, annotations | `contents: read` (`sign` writes into the workspace only) |
 | `comment: true` | `pull-requests: write`, and `GITHUB_TOKEN` in the step env |
 | `refresh` with a pull request (peter-evans/create-pull-request) | `contents: write`, `pull-requests: write` |
 | Manifest comparison | none beyond `contents: read`; the base ref must be fetched (`fetch-depth: 0`) |

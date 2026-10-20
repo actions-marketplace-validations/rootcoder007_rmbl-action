@@ -4,6 +4,15 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
+- `mode: sign` (inputs `scheme`, `overwrite`): pins each `data_provenance.json` on its first
+  run and writes an hmac `capsule_bundle.json` with `cpsbndl()` under `key`, then verifies,
+  so a program in any language only writes the data and a plain provenance.
+- `docs/bundle-format.md`: the capsule, the canonical JSON form, the bundle and the hmac
+  attestation byte by byte, with test vectors in `spec/vectors/` that CI re-derives with
+  the package.
+- Native signing examples for C, C++, Go, Rust, Zig, Java, Node, TypeScript, Bun, Lua and
+  SQL (sqlite3 with sh and OpenSSL), each writing the vectors byte for byte and verified,
+  then tampered with, in CI; universal examples in POSIX sh, awk and Wolfram Language.
 - First release: modes `verify`, `drift`, `refresh` and `report`; JSON Schema validation of
   every capsule file (`spec/`); hmac and post-quantum bundle signatures; manifest
   comparison with the base branch; sticky pull-request comment; annotations; `fail-on`
