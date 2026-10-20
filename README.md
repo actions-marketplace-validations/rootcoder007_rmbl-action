@@ -433,6 +433,11 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `cache` | `false` | Keep fetched sources and data.rmorie.com tables in `.rmbl-cache/` (save and restore it with `actions/cache`). A cached source is used only when the live fetch fails, and the report says so. |
 | `allow-file` | `false` | Accept `file://` source URLs, for local mirrors and tests. |
 
+Inputs reach the container as `RMBL_*` variables. An input left empty does not clear a
+variable of the same name set in the job's or workflow's `env`, which then reaches the
+action: a job-level `RMBL_KEY` signs in `mode: sign` with no `key` given. Do not name your
+own variables `RMBL_*`.
+
 ## Outputs
 
 | Output | Meaning |

@@ -3,3 +3,4 @@
 
 # example builds
 examples/rust/target/
+.zig-cache/

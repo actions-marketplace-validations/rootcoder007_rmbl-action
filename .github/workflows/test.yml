@@ -471,7 +471,8 @@ jobs:
     env:
       EX: ${{ matrix.lang }}
       # a test value; in a real workflow this comes from a repository secret
-      RMBL_KEY: rmbl-action-test-secret
+      # given to the producers only; the action gets it as `key`
+      CAPSULE_KEY: rmbl-action-test-secret
       KEY_ID: da884d9bd335b6a01e5354ef0f0f1f3df9a7a7ee8c2c00c7a893e47ed9abd053
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -517,18 +518,21 @@ jobs:
           buildCache: false
       - name: The producer writes the test vectors byte for byte
         env:
+          RMBL_KEY: ${{ env.CAPSULE_KEY }}
           RMBL_UTC: "2026-01-01T00:00:00Z"
           RMBL_NOTE_FILE: spec/vectors/note.txt
         run: |
           sh "examples/$EX/run.sh" "vec/$EX"
           for f in data.csv data_provenance.json capsule_bundle.json; do cmp "spec/vectors/capsule/$f" "vec/$EX/$f"; done
       - name: The producer writes a capsule now
+        env:
+          RMBL_KEY: ${{ env.CAPSULE_KEY }}
         run: sh "examples/$EX/run.sh" "out/$EX"
       - uses: ./
         id: rmbl
         with:
           path: out
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           public-key: ${{ env.KEY_ID }}
           report: native.md
       - run: |
@@ -544,7 +548,7 @@ jobs:
         continue-on-error: true
         with:
           path: out
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           public-key: ${{ env.KEY_ID }}
           report: tampered.md
       - run: |
@@ -558,7 +562,8 @@ jobs:
     timeout-minutes: 20
     env:
       # a test value; in a real workflow this comes from a repository secret
-      RMBL_KEY: rmbl-action-test-secret
+      # not RMBL_KEY: a job env of that name reaches the action's container (see Inputs in the README)
+      CAPSULE_KEY: rmbl-action-test-secret
       KEY_ID: da884d9bd335b6a01e5354ef0f0f1f3df9a7a7ee8c2c00c7a893e47ed9abd053
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -574,7 +579,7 @@ jobs:
         with:
           path: any
           mode: sign
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           report: sign.md
       - run: |
           cat sign.md
@@ -591,7 +596,7 @@ jobs:
         id: verify
         with:
           path: any
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           public-key: ${{ env.KEY_ID }}
           report: verify.md
       - run: |
@@ -604,7 +609,7 @@ jobs:
         with:
           path: any
           mode: sign
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
       - run: test "${{ steps.again.outcome }}" = failure
       - name: Signing again with overwrite
         uses: ./
@@ -612,7 +617,7 @@ jobs:
         with:
           path: any
           mode: sign
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           overwrite: true
       - run: test "${{ steps.overwrite.outputs.status }}" = ok
       - name: Signing without a key
@@ -631,7 +636,7 @@ jobs:
         continue-on-error: true
         with:
           path: any
-          key: ${{ env.RMBL_KEY }}
+          key: ${{ env.CAPSULE_KEY }}
           public-key: ${{ env.KEY_ID }}
           report: tampered.md
       - run: |
