@@ -105,10 +105,27 @@ check_capsule <- function(d) {
   prov_file <- file.path(d, "data_provenance.json")
   bundle_file <- file.path(d, "capsule_bundle.json")
   prov <- if (file.exists(prov_file)) loadprov(prov_file)
+  rows <- list()
+  keep_rows <- function(chk, label) {
+    ck <- chk$checks
+    if (length(chk$missing)) {
+      ck <- rbind(ck, data.frame(check = chk$missing, ok = FALSE,
+                                 detail = "required check was never made"))
+    }
+    rows[[length(rows) + 1L]] <<- cbind(part = label, ck)
+  }
+  res$size_bytes <- NA_real_
+  res$rows <- NA_real_
   if (!is.null(prov)) {
+    dfile0 <- str1(prov$resource$filename)
+    if (!is.null(dfile0) && file.exists(file.path(d, dfile0))) {
+      res$size_bytes <- file.size(file.path(d, dfile0))
+    }
+    res$rows <- as.numeric(str1(prov$resource$row_count_data_rows) %||% NA)
     res$source <- str1(prov$resource$direct_url) %||% str1(prov$source$url) %||% ""
     res$pinned_sha256 <- str1(prov$resource$sha256) %||% ""
     chk <- vrfcps(d)
+    keep_rows(chk, "provenance")
     res$checks_passed <- sum(chk$checks$ok)
     res$checks_total <- nrow(chk$checks) + length(chk$missing)
     if (!isTRUE(chk$ok)) {
@@ -118,6 +135,7 @@ check_capsule <- function(d) {
   }
   if (file.exists(bundle_file)) {
     bchk <- cpsbndlvrf(bundle_file, d, keyexp = if (nzchar(pubkey)) pubkey)
+    keep_rows(bchk, "bundle")
     res$checks_passed <- res$checks_passed + sum(bchk$checks$ok)
     res$checks_total <- res$checks_total + nrow(bchk$checks)
     if (!isTRUE(bchk$ok)) {
@@ -152,6 +170,10 @@ check_capsule <- function(d) {
                      error = function(e) NULL)
           if (!is.null(ref) && !is.null(cur)) {
             dr <- cpsdrft(ref, cur)
+            res$.drift <- dr
+            # the Benford first-digit screen of each numeric column, old and new data
+            bf <- function(x) if (is.numeric(x)) tryCatch(benfordtst(x)$p_value, error = function(e) NA_real_) else NA_real_
+            res$.benford <- lapply(dr$columns$column, function(nm) c(ref = bf(ref[[nm]]), cur = bf(cur[[nm]])))
             cols <- dr$columns
             hit <- cols[!is.na(cols$drifted) & cols$drifted, , drop = FALSE]
             res$drift <- list(any = isTRUE(dr$anydrft), nref = dr$nref, ncur = dr$ncur,
@@ -209,6 +231,7 @@ check_capsule <- function(d) {
               notes$add("capsule_bundle.json no longer matches the data: re-sign it with cpsbndl()")
             }
             again <- vrfcps(d)
+            keep_rows(again, "after refresh")
             if (!isTRUE(again$ok)) {
               res$result <- "error"
               for (x in failed_rows(again, "after refresh ")) notes$add(x)
@@ -219,6 +242,7 @@ check_capsule <- function(d) {
     }
   }
   res$notes <- as.list(notes$get())  # always a JSON array
+  res$.rows <- if (length(rows)) do.call(rbind, rows)
   res
 }
 # a data file name that stays inside the capsule
@@ -240,36 +264,92 @@ status <- if (any(st == "error")) "error" else if (any(st == "drift")) "drift" e
 changed <- vapply(Filter(function(r) isTRUE(r$changed), results), `[[`, "", "capsule")
 
 esc <- function(x) gsub("|", "\\|", gsub("\n", " ", x, fixed = TRUE), fixed = TRUE)
-md <- c(sprintf("## rmbl capsule %s: %s", mode, status), "")
+mark <- c(ok = "✔", drift = "⚠", error = "✖")
+host <- function(u) {
+  if (!nzchar(u)) return("-")
+  if (startsWith(u, "file://")) return("local file")
+  sub("^[a-z]+://([^/:]+).*$", "\\1", u)
+}
+num <- function(x, digits = 3) ifelse(is.na(x), "-", trimws(formatC(x, digits = digits, format = "g")))
+kb <- function(b) if (is.na(b)) "-" else if (b < 1024^2) sprintf("%.1f KB", b / 1024) else sprintf("%.1f MB", b / 1024^2)
+pkgver <- as.character(utils::packageVersion("rmoriebricklayer"))
+
+md <- c(sprintf("## rmbl capsule %s with [rmoriebricklayer %s](https://github.com/rootcoder007/rmorie-bricklayer)",
+                mode, pkgver), "")
 if (!length(dirs)) {
-  md <- c(md, sprintf("No manifests found under `%s`%s.", root,
+  md <- c(md, sprintf("✔ No manifests found under `%s`%s.", root,
                       if (nzchar(glob)) sprintf(" matching `%s`", glob) else ""))
 } else {
-  md <- c(md, sprintf("%d capsule(s) under `%s`: %d ok, %d drift, %d error.", length(dirs), root,
+  md <- c(md, sprintf("**%s %s**: %d capsule%s under `%s`: %d ok, %d drift, %d error", mark[[status]], status,
+                      length(dirs), if (length(dirs) == 1L) "" else "s", root,
                       sum(st == "ok"), sum(st == "drift"), sum(st == "error")), "",
-          paste0("| Capsule | Source | Pinned SHA-256 | Result | Checks |",
-                 if (mode %in% c("drift", "refresh")) " Drift |" else ""),
-          paste0("|---|---|---|---|---|", if (mode %in% c("drift", "refresh")) "---|" else ""))
+          "| Capsule | Source | SHA-256 | Size | Rows | Result |",
+          "|---|---|---|---|---|---|")
   for (r in results) {
-    md <- c(md, paste0(sprintf("| `%s` | %s | `%s` | %s | %d/%d |", esc(r$capsule),
-                               if (nzchar(r$source)) esc(r$source) else "-",
-                               short(r$pinned_sha256), r$result, r$checks_passed, r$checks_total),
-                       if (mode %in% c("drift", "refresh"))
-                         sprintf(" %s |", esc(r$drift_summary %||%
-                                                (if (isTRUE(r$changed)) "changed" else if (nzchar(r$fetched_sha256)) "unchanged" else "-")))
-                       else ""))
+    md <- c(md, sprintf("| `%s` | %s | `%s` | %s | %s | %s %s |", esc(r$capsule), esc(host(r$source)),
+                        if (nzchar(r$pinned_sha256)) short(r$pinned_sha256) else "-",
+                        kb(r$size_bytes %||% NA), if (is.na(r$rows %||% NA)) "-" else format(r$rows, big.mark = ","),
+                        mark[[r$result]], r$result))
   }
-  for (r in results) if (length(r$notes)) {
-    md <- c(md, "", sprintf("**%s**", r$capsule), "", paste0("- ", esc(unlist(r$notes))))
+  for (r in results) {
+    md <- c(md, "", "<details>",
+            sprintf("<summary>%s <code>%s</code>: %s, %d of %d checks passed (click to open)</summary>",
+                    mark[[r$result]], r$capsule, r$result, r$checks_passed, r$checks_total), "")
+    if (nzchar(r$source)) md <- c(md, sprintf("- Source: %s", esc(r$source)))
+    if (nzchar(r$pinned_sha256)) md <- c(md, sprintf("- Pinned SHA-256: `%s`", r$pinned_sha256))
+    if (nzchar(r$fetched_sha256)) md <- c(md, sprintf("- Fetched SHA-256: `%s`%s", r$fetched_sha256,
+                                                      if (isTRUE(r$changed)) " (changed)" else " (same)"))
+    if (!is.null(r$.rows)) {
+      ck <- r$.rows
+      md <- c(md, "", "| | Check | Detail |", "|---|---|---|",
+              sprintf("| %s | %s%s | %s |", ifelse(ck$ok, mark[["ok"]], mark[["error"]]),
+                      ifelse(ck$part == "provenance", "", paste0(ck$part, ": ")), esc(ck$check),
+                      esc(ifelse(nzchar(ck$detail), ck$detail, "-"))))
+    }
+    dr <- r$.drift
+    if (!is.null(dr)) {
+      sm <- summary(dr)  # the package's own verdict
+      md <- c(md, "", sprintf("**Drift: %s %s.** %d of %d columns drifted%s%s%s; rows %s to %s, alpha %s.",
+                              if (isTRUE(sm$anydrft)) mark[["drift"]] else mark[["ok"]],
+                              if (isTRUE(sm$anydrft)) "drift detected" else "no drift detected",
+                              sm$ndri, sm$ntes,
+                              if (length(sm$drifted)) paste0(" (", paste(sm$drifted, collapse = ", "), ")") else "",
+                              if (length(sm$added)) paste0("; added ", paste(sm$added, collapse = ", ")) else "",
+                              if (length(sm$removed)) paste0("; removed ", paste(sm$removed, collapse = ", ")) else "",
+                              format(dr$nref, big.mark = ","), format(dr$ncur, big.mark = ","), dr$alpha))
+      cols <- dr$columns
+      if (nrow(cols)) {
+        bfp <- do.call(rbind, r$.benford)
+        md <- c(md, "",
+                "| | Column | Type | Statistic | p | PSI | JS | Benford p (pinned / new) |",
+                "|---|---|---|---|---|---|---|---|",
+                sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |",
+                        ifelse(is.na(cols$drifted), "?", ifelse(cols$drifted, mark[["drift"]], mark[["ok"]])),
+                        esc(cols$column), cols$type,
+                        ifelse(is.na(cols$statistic), "-",
+                               paste(ifelse(cols$type %in% c("numeric", "date"), "KS D", "χ²"),
+                                     num(cols$statistic))),
+                        num(cols$p_value), num(cols$psi), num(cols$jsdiv),
+                        ifelse(is.na(bfp[, "ref"]) & is.na(bfp[, "cur"]), "-",
+                               paste(num(bfp[, "ref"]), "/", num(bfp[, "cur"])))))
+      }
+    }
+    if (length(r$notes)) md <- c(md, "", paste0("- ", esc(unlist(r$notes))))
+    md <- c(md, "", "</details>")
   }
 }
-md <- c(md, "", sprintf("rmoriebricklayer %s, mode `%s`, fail-on `%s`.",
-                        utils::packageVersion("rmoriebricklayer"), mode, fail_on))
-writeLines(md, report_path)
+md <- c(md, "", "---", "", sprintf("mode `%s` · fail-on `%s` · rmoriebricklayer %s · %s",
+                                    mode, fail_on, pkgver, R.version.string))
+writeLines(enc2utf8(md), report_path, useBytes = TRUE)
 summ <- Sys.getenv("GITHUB_STEP_SUMMARY")
-if (nzchar(summ)) cat(md, file = summ, sep = "\n", append = TRUE)
+if (nzchar(summ)) {
+  con <- file(summ, "a", encoding = "UTF-8")
+  writeLines(md, con)
+  close(con)
+}
 cat(md, sep = "\n")
 
+results <- lapply(results, function(r) r[!startsWith(names(r), ".") & !names(r) %in% c("size_bytes", "rows")])
 writeLines(tojs(list(status = status, mode = mode, path = root, capsules = results),
                 auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA_real_), json_path)
 

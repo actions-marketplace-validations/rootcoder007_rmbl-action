@@ -23,10 +23,23 @@ a signed `capsule_bundle.json` written by `cpsbndl()`, or both.
 ## Usage
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
 - uses: rootcoder007/rmbl-action@v1
   with:
     path: capsules
+```
+
+### Verify on every push
+
+```yaml
+name: capsules
+on: push
+jobs:
+  rmbl-action:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: rootcoder007/rmbl-action@v1
 ```
 
 ### Pull request gate
@@ -39,9 +52,9 @@ on:
     branches: [main]
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: rootcoder007/rmbl-action@v1
         with:
           path: capsules
@@ -61,10 +74,10 @@ permissions:
   issues: write
 jobs:
   drift:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
         with:
           path: .rmbl-cache
           key: rmbl-${{ github.run_id }}
@@ -99,9 +112,9 @@ permissions:
   pull-requests: write
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: rootcoder007/rmbl-action@v1
         id: rmbl
         with:
@@ -114,7 +127,7 @@ jobs:
         env:
           IA_S3_ACCESS_KEY: ${{ secrets.IA_S3_ACCESS_KEY }}
           IA_S3_SECRET_KEY: ${{ secrets.IA_S3_SECRET_KEY }}
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         if: steps.rmbl.outputs.changed != ''
         with:
           branch: capsule-refresh
@@ -125,6 +138,25 @@ jobs:
 
 The report and JSON paths are relative to the workspace; in the refresh workflow they are
 written outside it so they do not end up in the pull request.
+
+## The report
+
+The same Markdown is written to the `report` file and added to the job summary:
+
+1. A heading naming the mode and the rmoriebricklayer version in the image.
+2. A status line: ✔ ok, ⚠ drift or ✖ error, with the number of capsules in each.
+3. One table over all capsules: directory, source host, pinned SHA-256 (first 12 hex
+   digits), data size, row count and result.
+4. One collapsible block per capsule, closed by default: the full source URL, the full
+   pinned and fetched digests, and every check row from `vrfcps()` and `cpsbndlvrf()`
+   (✔/✖, check, detail). In `drift` and `refresh` mode a changed source adds the package's
+   drift verdict in one line and a per-column table: type, Kolmogorov-Smirnov D or
+   chi-square statistic, p-value, population stability index, Jensen-Shannon divergence
+   and the Benford first-digit p-value of the pinned and the new data (`benfordtst()`,
+   numeric columns). Notes (why a fetch failed, what refresh wrote) close the block.
+5. A footer with mode, `fail-on`, package and R versions.
+
+When no capsule is found the report is the heading and "No manifests found under `<path>`".
 
 ## Inputs
 
