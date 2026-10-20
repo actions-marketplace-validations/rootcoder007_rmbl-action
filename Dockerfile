@@ -8,4 +8,5 @@ RUN Rscript -e 'quit(status = !requireNamespace("rmoriebricklayer", quietly = TR
      && MAKEFLAGS="-j$(nproc)" R CMD INSTALL --no-docs --no-html /bricklayer)
 
 COPY entrypoint.sh check.R /rmbl/
+COPY spec /rmbl/spec
 ENTRYPOINT ["/rmbl/entrypoint.sh"]

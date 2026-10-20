@@ -19,7 +19,8 @@ prov <- list(name = "fixture",
                              direct_url = paste0("file://", prefix, "/", src),
                              sha256 = sha256file(f), size_bytes = file.size(f),
                              row_count_data_rows = nrow(df)),
-             schema = list(expected_columns = names(df)))
+             schema = list(expected_columns = names(df)),
+             table = list(rounding = 5, suppression_limit = 10))
 writeLines(tojs(prov, auto_unbox = TRUE, pretty = TRUE), file.path(dir, "data_provenance.json"))
 if (length(a) > 3L && a[[4L]] == "bundle") {
   # sign every file of the capsule; the public key goes beside the capsule, not in it

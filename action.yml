@@ -13,8 +13,23 @@ inputs:
     description: "verify (digests, schema, bundle signatures), drift (also re-fetch each source and run the drift battery), refresh (drift, then write changed data and provenance back), or report (verify without failing)."
     default: "verify"
   fail-on:
-    description: "error (fail when a capsule does not verify or cannot be fetched), drift (also fail when a source drifted), or never."
+    description: "error (fail when a capsule does not verify or cannot be fetched), drift (also on drift above psi-fail), warn (also on a column past psi-warn), or never."
     default: "error"
+  psi-warn:
+    description: "Population stability index above which a changed column is a warning (drftpsi() band: 0.1)."
+    default: "0.1"
+  psi-fail:
+    description: "Population stability index above which a flagged column is drift (drftpsi() band: 0.25); also passed to cpsdrft() as psithr."
+    default: "0.25"
+  base-ref:
+    description: "Branch or ref whose manifest.json / results/manifest.json each capsule is compared with. Defaults to the pull request's base branch; needs it fetched (fetch-depth: 0)."
+    default: ""
+  comment:
+    description: "true: post or update one sticky comment with the report on the pull request (needs GITHUB_TOKEN in the step env and pull-requests: write); dry-run: write it to rmbl-comment.md instead; false."
+    default: "false"
+  snapshot:
+    description: "true: look up the latest Internet Archive snapshot of each http(s) source (wbsnpurl(), read-only, one request per capsule)."
+    default: "false"
   key:
     description: "Optional data.rmorie.com key, exported to the package as MORIE_HOSTED_KEY. Pass it from a secret."
     required: false
@@ -45,7 +60,7 @@ inputs:
 
 outputs:
   status:
-    description: "ok, drift or error."
+    description: "ok, warn, drift or error."
   report:
     description: "Path of the Markdown report."
   json:
@@ -56,6 +71,10 @@ outputs:
     description: "Number of capsules that verified."
   failed:
     description: "Number of capsules with an error."
+  manifest-changed:
+    description: "true when a manifest differs from the base ref's copy (pull requests or base-ref)."
+  comment:
+    description: "off, dry-run, skipped, created, updated or failed."
 
 runs:
   using: "docker"
@@ -72,3 +91,8 @@ runs:
     RMBL_WAYBACK: ${{ inputs.wayback }}
     RMBL_CACHE: ${{ inputs.cache }}
     RMBL_ALLOW_FILE: ${{ inputs.allow-file }}
+    RMBL_PSI_WARN: ${{ inputs.psi-warn }}
+    RMBL_PSI_FAIL: ${{ inputs.psi-fail }}
+    RMBL_BASE_REF: ${{ inputs.base-ref }}
+    RMBL_COMMENT: ${{ inputs.comment }}
+    RMBL_SNAPSHOT: ${{ inputs.snapshot }}
