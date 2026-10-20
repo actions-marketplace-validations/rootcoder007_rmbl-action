@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rootcoder007/rmbl-action/spec/bundle.schema.json",
+  "title": "capsule_bundle.json",
+  "description": "A signed capsule bundle as cpsbndl() writes it and cpsbndlrd() reads it; cpsbndlvrf() re-hashes the files and checks the attestation (cpschkatst()).",
+  "type": "object",
+  "required": ["files", "manifest_digest", "bundled_utc", "attestation"],
+  "properties": {
+    "files": {
+      "type": "array",
+      "description": "Every bundled file (cpsbndl()).",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "size_bytes"],
+        "properties": {
+          "path": {"type": "string", "description": "Path relative to the capsule (cpsbndl())."},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256file() of the file."},
+          "size_bytes": {"type": "integer", "minimum": 0, "description": "file.size() of the file."}
+        }
+      }
+    },
+    "manifest_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "mnfdgst() of the manifest bundled with the files."},
+    "bundled_utc": {"type": "string", "description": "UTC time of bundling, YYYY-MM-DDThh:mm:ssZ (cpsbndl())."},
+    "attestation": {
+      "type": "object",
+      "description": "The signature over the payload (cpsatst()).",
+      "required": ["digest", "scheme", "public", "context", "prehash", "note", "signed_utc", "signature"],
+      "properties": {
+        "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "mnfdgst() of the signed payload (cpsatst())."},
+        "scheme": {"type": "string", "description": "Signature scheme, e.g. ML-DSA-44 or xmss-sha256 (cpsatst())."},
+        "public": {"type": "string", "pattern": "^[0-9a-f]+$", "description": "Public key, hex (cpsatst())."},
+        "context": {"type": "string", "description": "Context string, hex for a raw one (cpsatst())."},
+        "prehash": {"type": "string", "description": "Pre-hash, none or a hash name (cpsatst())."},
+        "note": {"type": "string", "description": "Signer's note, covered by the signature (cpsatst())."},
+        "signed_utc": {"type": "string", "description": "UTC time of signing (cpsatst())."},
+        "signature": {"type": "object", "required": ["scheme", "signature"], "description": "The cpssign() signature."}
+      }
+    }
+  }
+}

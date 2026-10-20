@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rootcoder007/rmbl-action/spec/capsule.schema.json",
+  "title": "data_provenance.json",
+  "description": "The provenance record of a capsule, as rmoriebricklayer reads it: loadprov() parses it, vrfcps() verifies the data against it. Fields other than those listed are allowed and ignored by the checks.",
+  "type": "object",
+  "required": ["resource"],
+  "properties": {
+    "name": {"type": "string", "description": "Capsule name (usecpstmpl())."},
+    "synthetic": {"type": "boolean", "description": "true marks the data as generated, which fails data_not_synthetic (vrfcps())."},
+    "resource": {
+      "type": "object",
+      "description": "The pinned data file (vrfcps()).",
+      "required": ["filename", "sha256"],
+      "properties": {
+        "filename": {"type": "string", "minLength": 1, "description": "Data file, relative to the capsule directory; must stay inside it (vrfcps(): data_present)."},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "SHA-256 of the data file, 64 hex characters (vrfcps(): data_sha256, via vrfsha256())."},
+        "size_bytes": {"type": "integer", "minimum": 0, "description": "File size in bytes (vrfcps(): data_size_bytes)."},
+        "row_count_data_rows": {"type": "integer", "minimum": 0, "description": "Data rows of the CSV, header excluded, as utils::read.csv() counts them (vrfcps(): data_row_count)."},
+        "direct_url": {"type": "string", "description": "Download URL of the data file (citecps(); fetched by the action in drift and refresh mode)."},
+        "synthetic": {"type": "boolean", "description": "true marks the data as generated (vrfcps(): data_not_synthetic)."},
+        "name_match_pattern": {"type": "string", "description": "Regular expression for the resource name on a CKAN portal (rslvckan())."}
+      }
+    },
+    "source": {
+      "type": "object",
+      "description": "Where the data came from (usecpstmpl()). source.url is the fetch URL when resource.direct_url is absent.",
+      "properties": {
+        "url": {"type": "string", "description": "Source URL (usecpstmpl())."},
+        "publisher": {"type": "string", "description": "Publisher (usecpstmpl())."},
+        "licence": {"type": "string", "description": "Licence (usecpstmpl())."},
+        "retrieved": {"type": "string", "description": "Retrieval date, YYYY-MM-DD (usecpstmpl())."},
+        "sha256": {"type": "string", "description": "Digest written by the template's analysis.R (usecpstmpl()); vrfcps() checks resource.sha256, not this one."}
+      }
+    },
+    "script": {
+      "type": "object",
+      "description": "The analysis script pinned with the data (vrfcps(): script_sha256).",
+      "properties": {
+        "filename": {"type": "string", "description": "Script file, relative to the capsule (vrfcps())."},
+        "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "SHA-256 of the script (vrfcps())."}
+      }
+    },
+    "schema": {
+      "type": "object",
+      "description": "Pinned structure of the data, checked by valsch() (vrfcps(): schema_valid).",
+      "properties": {
+        "expected_columns": {"type": "array", "items": {"type": "string"}, "description": "Column names the data must have (valsch())."},
+        "expected_dtypes": {"type": "object", "description": "Column name to type (valsch())."}
+      }
+    },
+    "table": {
+      "type": "object",
+      "description": "How the published table is read (usecpstmpl(), anltab()); rounding and suppression_limit are the publication bounds shown in the report.",
+      "properties": {
+        "value": {"type": "string"},
+        "period": {"type": "string"},
+        "by": {"type": "array", "items": {"type": "string"}},
+        "rounding": {"type": ["number", "null"]},
+        "suppression_limit": {"type": ["number", "null"]}
+      }
+    },
+    "wayback": {
+      "type": "object",
+      "description": "Internet Archive snapshots; csv_snapshot is the fallback fdl() is given in drift mode and where refresh records a new capture (wbsave()).",
+      "properties": {
+        "csv_snapshot": {"type": "string"},
+        "captured_at_utc": {"type": "string"}
+      }
+    }
+  }
+}

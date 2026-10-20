@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rootcoder007/rmbl-action/spec/manifest.schema.json",
+  "title": "manifest.json",
+  "description": "A results manifest as mkmnf() builds it, recrd() fills it and wrmnfjs() writes it; vrfcps() re-checks every PASS/DIFFER verdict (manifest_consistent).",
+  "type": "object",
+  "required": ["meta", "results"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Caller-supplied metadata (mkmnf()).",
+      "properties": {
+        "synthetic": {"type": "boolean", "description": "Set by mkmnf() for generated data; fails data_not_synthetic (vrfcps())."},
+        "script_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$", "description": "Pinned script digest (vrfcps(): script_sha256)."},
+        "script_file": {"type": "string", "description": "Script file the digest pins (vrfcps())."}
+      }
+    },
+    "results": {
+      "type": ["object", "array"],
+      "description": "One entry per recorded cross-check, keyed by name (recrd()); an empty manifest writes [] (wrmnfjs()).",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["observed", "expected", "status"],
+        "properties": {
+          "group": {"type": "string", "description": "Grouping label (recrd(): grp)."},
+          "observed": {"description": "Value the analysis produced (recrd(): obs)."},
+          "expected": {"description": "Value it should reproduce (recrd(): expd)."},
+          "diff": {"type": ["number", "null"], "description": "Absolute difference, null when not numeric (recrd())."},
+          "status": {"type": "string", "enum": ["PASS", "DIFFER", "INFO"], "description": "Verdict (recrd())."},
+          "tol": {"type": "number", "minimum": 0, "description": "Absolute tolerance (recrd())."},
+          "note": {"type": ["string", "null"], "description": "Sentence for synthetic entries (recrd())."}
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Session facts (capenv(), when mkmnf(env = TRUE)).",
+      "properties": {
+        "r_version": {"type": "string"},
+        "platform": {"type": "string"},
+        "os": {"type": "string"},
+        "captured_utc": {"type": "string"},
+        "rng_kind": {"type": "string"},
+        "rng_seeded": {"type": "boolean"},
+        "packages": {"type": ["object", "array"]}
+      }
+    }
+  }
+}
