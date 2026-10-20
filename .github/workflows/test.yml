@@ -217,7 +217,7 @@ jobs:
           report: refused.md
       - run: |
           test "${{ steps.refused.outputs.status }}" = error
-          grep -q 'explained: raised by .rmbl_check_public_url()' refused.md
+          grep -q 'a source to fetch must be an https:// URL' refused.md
 
       - name: A provenance that breaks the capsule schema
         run: |
