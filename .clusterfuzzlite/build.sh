@@ -11,9 +11,10 @@ PKG="$SRC/rmorie-bricklayer/src"
 cd "$FZ"
 RCPP=$(R CMD config --cppflags)
 RLIB=$(R RHOME)/lib
-# libR and the libraries it pulls in travel with the binaries: the runner image has no R
+# libR and the libraries it pulls in travel with the binaries: the runner image has no R.
+# DT_RPATH (--disable-new-dtags) so the rpath also resolves libR's own dependencies (BLAS, ...)
 mkdir -p "$OUT/lib"
-RLD="-L$RLIB -Wl,-rpath,\$ORIGIN/lib -lR"
+RLD="-L$RLIB -Wl,--disable-new-dtags -Wl,-rpath,\$ORIGIN/lib -lR"
 FLAGS="-std=gnu++17 -DR_USE_C99_IN_CXX -I$PKG $RCPP $CXXFLAGS"
 $CXX $FLAGS fuzz_der.cpp -o "$OUT/fuzz_der" $LIB_FUZZING_ENGINE $RLD
 $CXX $FLAGS fuzz_strtod.cpp -o "$OUT/fuzz_strtod" $LIB_FUZZING_ENGINE $RLD
