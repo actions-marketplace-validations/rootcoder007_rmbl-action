@@ -4,7 +4,7 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
-- Base image bumped to the rmoriebricklayer 1.0.0 release build (c5ea091b): XMSS from `rmbl sign`, the 0.5.x name aliases, drift report and dashboard.
+- Base image bumped to the rmoriebricklayer 1.0.0 release build (49c090d1): XMSS from `rmbl sign`, the 0.5.x name aliases, drift report and dashboard.
 - ClusterFuzzLite runs the package's libFuzzer targets on pull requests and weekly.
 - The key is read only from the action's `key` input (`INPUT_KEY`): a job-level `RMBL_KEY` no
   longer signs in `mode: sign` when `key` is empty. Mode `sign` signs through the package's
