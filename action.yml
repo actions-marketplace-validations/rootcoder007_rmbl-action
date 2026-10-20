@@ -1,4 +1,4 @@
-name: "rmbl"
+name: "rmbl-action"
 description: "Verify, refresh and report rmoriebricklayer data capsules in CI"
 author: "rootcoder007"
 branding:
