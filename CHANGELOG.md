@@ -4,6 +4,11 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
+- `check.R` is a thin shell over rmoriebricklayer 1.0.0: the checks, report, JSON,
+  annotations, comment body and outputs come from `cpschk()`, `ghann()`, `ghcmt()` and
+  `ghout()`. Inputs and outputs are unchanged. The JSON adds every check row (`checks`),
+  annotations carry the line of a schema problem, and failed rows carry `explerr()` notes.
+  Base image bumped to the rmorie-bricklayer 1.0.0 build with those functions.
 - `mode: sign` (inputs `scheme`, `overwrite`): pins each `data_provenance.json` on its first
   run and writes an hmac `capsule_bundle.json` with `cpsbndl()` under `key`, then verifies,
   so a program in any language only writes the data and a plain provenance.

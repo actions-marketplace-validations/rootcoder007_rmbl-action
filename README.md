@@ -405,8 +405,9 @@ the comment:
    RAPL where the counters are readable, else modelled with Green Algorithms), then mode,
    `fail-on`, package and R versions.
 
-Every failed check is also a workflow annotation (`::error file=<capsule file>`), and every
-capsule in warn or drift a warning, so they show in the run header and the Files tab.
+Every failed check is also a workflow annotation: `::error file=<capsule file>` (with the
+line of a schema problem), and a `::warning` for each drift or warn row, so they show in the
+run header and the Files tab. The JSON also lists every check row under `checks`.
 
 When no capsule is found the report says "No manifests found under `<path>`".
 
@@ -432,11 +433,6 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `wayback` | `false` | During `refresh`, capture each changed `https` source in the Wayback Machine. Needs `IA_S3_ACCESS_KEY` and `IA_S3_SECRET_KEY` in the step env. A failed capture is a note, not an error. |
 | `cache` | `false` | Keep fetched sources and data.rmorie.com tables in `.rmbl-cache/` (save and restore it with `actions/cache`). A cached source is used only when the live fetch fails, and the report says so. |
 | `allow-file` | `false` | Accept `file://` source URLs, for local mirrors and tests. |
-
-Inputs reach the container as `RMBL_*` variables. An input left empty does not clear a
-variable of the same name set in the job's or workflow's `env`, which then reaches the
-action: a job-level `RMBL_KEY` signs in `mode: sign` with no `key` given. Do not name your
-own variables `RMBL_*`.
 
 ## Outputs
 
@@ -504,9 +500,13 @@ This is the action's `verify` mode: the exit status follows `fail-on` (`-e RMBL_
 and the report and JSON land in `rmbl-report.md` and `rmbl-results.json`. Every input is an
 `RMBL_` variable (`RMBL_MODE`, `RMBL_PUBLIC_KEY`, `RMBL_KEY`, `RMBL_ALLOW_FILE`, ...). The base
 image `ghcr.io/rootcoder007/rmorie-bricklayer` has the package installed and `rmbl` on its
-path; its `rmbl verify|drift|report|refresh <dir> [--json] [--fail-on ...]` runs the
-package's capsule checks with the same summary layout, without the PSI bands, the manifest
-comparison, the cache, the comment and the annotations this image adds.
+path; its `rmbl verify|drift|report <dir> [--json] [--fail-on ...]` runs the same checks
+with the same report: `--psi-warn`, `--psi-fail`, `--base MANIFEST|DIR`, `--cache DIR`,
+`--allow-file`, `--snapshot`, `--manifests GLOB` and `--no-footprint` are the inputs of this
+action. From R, `cpschk()` returns the checks, `format()` the report or the JSON, and
+`ghann()`, `ghcmt()` and `ghout()` the annotations, the comment body and the outputs this
+action prints; `check.R` only reads the inputs, signs in mode `sign`, resolves the base ref
+with git and posts the comment.
 
 ## Versions
 
