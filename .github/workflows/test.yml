@@ -691,3 +691,9 @@ jobs:
         run: pipx run zizmor==1.31.1 --min-severity low .
       - name: The base image is pinned by digest
         run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}$' Dockerfile
+      - name: shellcheck (entrypoint.sh, the fuzz build script)
+        run: shellcheck --severity=style entrypoint.sh .clusterfuzzlite/build.sh
+      - name: hadolint (Dockerfile, the fuzz Dockerfile)
+        run: |
+          docker run --rm -i hadolint/hadolint@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint - < Dockerfile
+          docker run --rm -i hadolint/hadolint@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d hadolint --ignore DL3008 - < .clusterfuzzlite/Dockerfile

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Build the libFuzzer targets with the engine and sanitizer ClusterFuzzLite selects
+# shellcheck disable=SC2086,SC2046,SC2153  # $CFLAGS/$CXXFLAGS/$LIB_FUZZING_ENGINE are flag strings the
+#   fuzzing engine exports (oss-fuzz convention): word splitting on them is the point
 # ($CXXFLAGS, $LIB_FUZZING_ENGINE), from the package checkout the Dockerfile made.
 #   fuzz_der    the DER parser and RSA big-integer arithmetic (bundle signatures)
 #   fuzz_url    the URL policy and redirect rule (capsule sources)
