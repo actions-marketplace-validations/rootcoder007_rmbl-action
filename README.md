@@ -2,6 +2,7 @@
 
 [![test](https://github.com/rootcoder007/rmbl-action/actions/workflows/test.yml/badge.svg)](https://github.com/rootcoder007/rmbl-action/actions/workflows/test.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/rootcoder007/rmbl-action/badge)](https://scorecard.dev/viewer/?uri=github.com/rootcoder007/rmbl-action)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15736/badge)](https://www.bestpractices.dev/projects/15736)
 
 A GitHub Action that checks reproducible data capsules: a data file pinned by a JSON
 provenance record, optionally with a results manifest and a signed bundle. It finds every
