@@ -7,7 +7,7 @@ A GitHub Action that checks reproducible data capsules: a data file pinned by a 
 provenance record, optionally with a results manifest and a signed bundle. It finds every
 capsule under a directory, checks it with the R package
 [rmoriebricklayer](https://github.com/rootcoder007/rmorie-bricklayer)
-([www.rmorie.com](https://www.rmorie.com)) inside a Docker image, writes a Markdown report
+([www.rmorie.com/provenance](https://www.rmorie.com/provenance)) inside a Docker image, writes a Markdown report
 and a JSON file, adds the report to the job summary, annotates the failing files, and fails
 the job according to `fail-on`.
 
