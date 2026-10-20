@@ -565,6 +565,11 @@ Report a vulnerability privately: [`.github/SECURITY.md`](.github/SECURITY.md).
   the Internet Archive to capture the source URLs with your archive.org keys.
 - `file://` sources are refused unless `allow-file: true`; plain `http://` and private
   addresses are refused by the package.
+- Post-quantum bundles (ML-DSA-65, SLH-DSA, XMSS) verify in every mode. `mode: sign` writes
+  `hmac` bundles only: an XMSS key is stateful (RFC 10033), and `rmbl sign --scheme xmss-sha256`
+  refuses to run from a key in an environment variable unless `--state-file` names a file that
+  persists between runs, which a CI job does not have. Sign XMSS or ML-DSA bundles outside CI
+  with `rmbl sign` and let the action verify them.
 
 ## Licence
 
