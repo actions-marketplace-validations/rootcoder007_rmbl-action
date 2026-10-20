@@ -2,6 +2,12 @@
 
 Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
+## 1.0.1 (2026-10-20)
+
+- Base image bumped to the rmoriebricklayer 1.0.0 release build ae81bf7a, the commit on CRAN
+  and in the rOpenSci submission (its dashboard report tests now pass on macOS, where the
+  report embeds PNG figures instead of SVG). No change to inputs, outputs or behaviour.
+
 ## 1.0.0 (2026-10-20)
 
 - Base image bumped to the rmoriebricklayer 1.0.0 release build (4d4229e0): XMSS from `rmbl sign`, the 0.5.x name aliases, drift report and dashboard.

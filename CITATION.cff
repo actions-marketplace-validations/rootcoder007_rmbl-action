@@ -7,7 +7,7 @@ authors:
     given-names: "Vansh Singh"
     orcid: "https://orcid.org/0009-0004-1750-3592"
     affiliation: "Centre for Criminology and Sociolegal Studies, University of Toronto"
-version: "1.0.0"
+version: "1.0.1"
 date-released: "2026-10-20"
 repository-code: "https://github.com/rootcoder007/rmbl-action"
 url: "https://github.com/marketplace/actions/rmbl"
