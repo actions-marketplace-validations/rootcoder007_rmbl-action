@@ -6,7 +6,7 @@ FROM gcr.io/oss-fuzz-base/base-builder@sha256:1f9cf74bc3d7029b528494542f9d9851b2
 RUN apt-get update \
  && apt-get install -y --no-install-recommends r-base-dev libcurl4-openssl-dev pkg-config zip \
  && rm -rf /var/lib/apt/lists/*
-ENV BL_REF=1443b80fcd624a166055d621185bf1b12021425a
+ENV BL_REF=4d4229e058819a8c13f099d7a3c352b804c218fa
 RUN git clone --quiet https://github.com/rootcoder007/rmorie-bricklayer "$SRC/rmorie-bricklayer" \
  && git -C "$SRC/rmorie-bricklayer" checkout --quiet "$BL_REF"
 COPY . "$SRC/rmbl-action"
