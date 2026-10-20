@@ -1,0 +1,74 @@
+name: "rmbl"
+description: "Verify, refresh and report rmoriebricklayer data capsules in CI"
+author: "rootcoder007"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Directory searched (recursively) for capsules: folders holding data_provenance.json or capsule_bundle.json."
+    default: "."
+  mode:
+    description: "verify (digests, schema, bundle signatures), drift (also re-fetch each source and run the drift battery), refresh (drift, then write changed data and provenance back), or report (verify without failing)."
+    default: "verify"
+  fail-on:
+    description: "error (fail when a capsule does not verify or cannot be fetched), drift (also fail when a source drifted), or never."
+    default: "error"
+  key:
+    description: "Optional data.rmorie.com key, exported to the package as MORIE_HOSTED_KEY. Pass it from a secret."
+    required: false
+    default: ""
+  public-key:
+    description: "Optional public key (hex) every capsule_bundle.json must be signed with."
+    required: false
+    default: ""
+  report:
+    description: "Path of the Markdown report."
+    default: "rmbl-report.md"
+  json:
+    description: "Path of the machine-readable results."
+    default: "rmbl-results.json"
+  manifests:
+    description: "Optional glob restricting which capsule files are checked, matched against their path (for example 'data/*'); '*' also matches '/'."
+    required: false
+    default: ""
+  wayback:
+    description: "true: during refresh, ask the Internet Archive to capture each changed https source (needs IA_S3_ACCESS_KEY and IA_S3_SECRET_KEY in the step env)."
+    default: "false"
+  cache:
+    description: "true: keep fetched sources and data.rmorie.com tables in .rmbl-cache/ of the workspace (restore it with actions/cache). A cached source is used only when the live fetch fails."
+    default: "false"
+  allow-file:
+    description: "true: accept file:// source URLs (local mirrors, tests)."
+    default: "false"
+
+outputs:
+  status:
+    description: "ok, drift or error."
+  report:
+    description: "Path of the Markdown report."
+  json:
+    description: "Path of the JSON results."
+  changed:
+    description: "Comma-separated capsule directories whose source data changed."
+  verified:
+    description: "Number of capsules that verified."
+  failed:
+    description: "Number of capsules with an error."
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    RMBL_PATH: ${{ inputs.path }}
+    RMBL_MODE: ${{ inputs.mode }}
+    RMBL_FAIL_ON: ${{ inputs.fail-on }}
+    RMBL_KEY: ${{ inputs.key }}
+    RMBL_PUBLIC_KEY: ${{ inputs.public-key }}
+    RMBL_REPORT: ${{ inputs.report }}
+    RMBL_JSON: ${{ inputs.json }}
+    RMBL_MANIFESTS: ${{ inputs.manifests }}
+    RMBL_WAYBACK: ${{ inputs.wayback }}
+    RMBL_CACHE: ${{ inputs.cache }}
+    RMBL_ALLOW_FILE: ${{ inputs.allow-file }}
