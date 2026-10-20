@@ -1,0 +1,43 @@
+{
+  "status": "ok",
+  "mode": "verify",
+  "path": "/tmp/tmp.FaUNFG09ob/all",
+  "capsules": [
+    {
+      "capsule": "/tmp/tmp.FaUNFG09ob/all/c",
+      "source": "https://example.org/sample.csv",
+      "pinned_sha256": "b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d",
+      "fetched_sha256": "",
+      "result": "ok",
+      "changed": false,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "drift": null,
+      "notes": []
+    },
+    {
+      "capsule": "/tmp/tmp.FaUNFG09ob/all/python",
+      "source": "https://example.org/sample.csv",
+      "pinned_sha256": "b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d",
+      "fetched_sha256": "",
+      "result": "ok",
+      "changed": false,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "drift": null,
+      "notes": []
+    },
+    {
+      "capsule": "/tmp/tmp.FaUNFG09ob/all/r",
+      "source": "https://example.org/sample.csv",
+      "pinned_sha256": "b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d",
+      "fetched_sha256": "",
+      "result": "ok",
+      "changed": false,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "drift": null,
+      "notes": []
+    }
+  ]
+}
