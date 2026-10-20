@@ -521,7 +521,7 @@ action, pin the full commit SHA of a release with its version in a comment, whic
 Dependabot (`package-ecosystem: github-actions`) keeps current:
 
 ```yaml
-      - uses: rootcoder007/rmbl-action@<full commit SHA> # v1.0.0
+      - uses: rootcoder007/rmbl-action@<full commit SHA> # v1.0.1
 ```
 
 Changes are listed in [`CHANGELOG.md`](CHANGELOG.md) and the release notes.

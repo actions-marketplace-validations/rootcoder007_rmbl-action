@@ -10,7 +10,7 @@ authors:
 version: "1.0.1"
 date-released: "2026-10-20"
 repository-code: "https://github.com/rootcoder007/rmbl-action"
-url: "https://github.com/marketplace/actions/rmbl"
+url: "https://github.com/marketplace/actions/rmbl-action"
 license: "AGPL-3.0-or-later"
 keywords:
   - github-actions
