@@ -27,6 +27,6 @@ for, which requests each mode makes, and what is uploaded.
 - The base image is pinned by digest in the `Dockerfile`; Dependabot proposes a new
   digest when the tag moves.
 - Workflows run with read-only tokens unless a job needs more, and say why.
-- zizmor audits the workflows on every push; OpenSSF Scorecard runs weekly.
+- zizmor and CodeQL audit the workflows on every push; OpenSSF Scorecard runs weekly.
 - `v1` is moved only by the release workflow, after the full test workflow passed on the
   same commit.
