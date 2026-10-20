@@ -1,0 +1,18 @@
+# morie 1.5.1 from PyPI, pinned by hash (every wheel and the sdist of the release)
+morie==1.5.1 \
+    --hash=sha256:3868a7c9fcebb0994a945eb1bdd9299afcc8218275807d99506b096fc27ada82 \
+    --hash=sha256:5feeb34d3be47036e066d6ca82ce93043d508327a20ebf8d1efec0ef013efba7 \
+    --hash=sha256:a5117d6d1288b9378630cdf5efe90a529622b2d39f3c12d0b0b899fa0ccd3f71 \
+    --hash=sha256:4b16d9b846f451a742e0dcce21a630568eb51307fb5c7ed8c12c7ded1ccfb6fe \
+    --hash=sha256:5e21cde8c0689eee9cf57022b8a03c8fcf8c8828806b55b4e070d5f26af3543d \
+    --hash=sha256:bf2b2007dd8ae64d08a4bdba61443e3fef495d4743c83260776815cabcb3c45a \
+    --hash=sha256:787a21e778e57d67dcce11edfc5522ed5ab23549ff1c0fec4aa06d41fca396c3 \
+    --hash=sha256:4bedc2fd33dcd054fe2207bc39555c26403734c1f1b16622379b1094ba431d08 \
+    --hash=sha256:aa22b37cf642997f63b790e4e3d0c2ec3d162d9a1a6962cf2e9d22d02dd5e83a \
+    --hash=sha256:d33e3dd0a98323e98c58a35fd12d381b30c1ac1f9bcc9ac3971363aa7fcbe48b \
+    --hash=sha256:34d24c7d50eac88ea33abc4224468a3158326d2bed21674142e6f5e77a7d8dd5 \
+    --hash=sha256:300d4182893fe6fd87bc6d3239c021c41ade908c3886bebe6668ba04cb210a42 \
+    --hash=sha256:e7aba5b41c6d6f7fe80874b037e7a26de77baacb16a772e3d7829b3eba217779 \
+    --hash=sha256:6f9f57604b1ed8d7fbecc98f0fddb9a758540d98b4518411ce3ed59c9acbd193 \
+    --hash=sha256:8a334b24f1c3999e82ab6c4139f20070eaedbe0a20e4bbebcbd90e5aaa802b4f \
+    --hash=sha256:952b47f01c7c275c3fd57f4b74d86751e9e0fdb9eb5b872f3001528df1f27d20

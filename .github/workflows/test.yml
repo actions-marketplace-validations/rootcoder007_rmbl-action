@@ -393,7 +393,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install morie from GitHub main
-        run: pip install "git+https://github.com/rootcoder007/morie@7dd73d2a601ec31ab169697a85b3480b78f8eba3"  # 1.5.1 update 4
+        run: pip install --require-hashes -r tests/requirements-morie.txt
       - name: Author and sign the capsule with morie (hmac)
         run: |
           mkdir -p signed/py && cp examples/data/sample.csv signed/py/
