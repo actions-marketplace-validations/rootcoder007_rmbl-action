@@ -3,6 +3,7 @@ name: test
 on:
   push:
   pull_request:
+  workflow_call:  # release.yml runs these jobs before it tags
 
 permissions:
   contents: read
@@ -16,7 +17,9 @@ jobs:
       matrix:
         mode: [verify, report]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: The base image has the package installed and rmbl on PATH
@@ -46,7 +49,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: Make a plain and a signed capsule with the package
@@ -121,7 +126,7 @@ jobs:
           test "${{ steps.drift.outputs.status }}" = drift
           test "${{ steps.drift.outputs.changed }}" = caps/one
           grep -q '"result": "drift"' drift.json
-          grep -q '| ⚠ | value | numeric | KS D' drift.md
+          grep -q '| ⚠ drift | value | numeric | KS D' drift.md
       - name: Drift, fail-on drift
         uses: ./
         id: driftfail
@@ -240,7 +245,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: A capsule with a results manifest committed on a base branch, then edited
@@ -272,8 +279,8 @@ jobs:
           cat mdiff.md
           test "${{ steps.mdiff.outputs.manifest-changed }}" = true
           test "${{ steps.mdiff.outputs.comment }}" = dry-run
-          grep -q '| ✔ | mean_x | 5.5 | 5.505 | 0.005 (within tol) | 0.01 |' mdiff.md
-          grep -q '| ✖ | n | 10 | 11 | 1 (outside tol) | 0 |' mdiff.md
+          grep -q '| ✔ match | mean_x | 5.5 | 5.505 | 0.005 (within tol) | 0.01 |' mdiff.md
+          grep -q '| ✖ mismatch | n | 10 | 11 | 1 (outside tol) | 0 |' mdiff.md
           grep -q '| new | sd_x |' mdiff.md
           head -1 rmbl-comment.md | grep -qx '<!-- rmbl-action -->'
       - name: Comment without a token
@@ -298,7 +305,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build the image
         run: docker build -t rmbl-local .
       - name: Author the capsule in R
@@ -311,7 +320,7 @@ jobs:
         with:
           path: out
       - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 1
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: capsule-r
           path: out/r/data_provenance.json
@@ -320,7 +329,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Author the capsule in Python (standard library only)
         run: |
           mkdir -p out/python && cp examples/data/sample.csv out/python/
@@ -335,7 +346,7 @@ jobs:
         with:
           path: out
       - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 2
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: capsule-python
           path: out/python/data_provenance.json
@@ -344,7 +355,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build and run the C author (OpenSSL EVP)
         run: |
           test -f /usr/include/openssl/evp.h || (sudo apt-get update && sudo apt-get install -y libssl-dev)
@@ -361,7 +374,7 @@ jobs:
         with:
           path: out
       - run: test "${{ steps.rmbl.outputs.status }}" = ok && test "${{ steps.rmbl.outputs.verified }}" = 2
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: capsule-c
           path: out/c/data_provenance.json
@@ -373,8 +386,10 @@ jobs:
       # a test value; in a real workflow this comes from a repository secret
       MORIE_CAPSULE_KEY: rmbl-action-test-secret
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Install morie from GitHub main
@@ -398,8 +413,8 @@ jobs:
           cat signed.md
           test "${{ steps.signed.outputs.status }}" = ok
           test "${{ steps.signed.outputs.verified }}" = 1
-          grep -q '| ✔ | bundle: attestation:key_as_expected | the attestation carries the expected key |' signed.md
-          grep -q '| ✔ | bundle: attestation:signature | - |' signed.md
+          grep -q '| ✔ pass | bundle: attestation:key_as_expected | the attestation carries the expected key |' signed.md
+          grep -q '| ✔ pass | bundle: attestation:signature | - |' signed.md
       - name: Verify with a wrong key
         uses: ./
         id: wrongkey
@@ -412,14 +427,14 @@ jobs:
       - run: |
           test "${{ steps.wrongkey.outcome }}" = failure
           test "${{ steps.wrongkey.outputs.status }}" = error
-          grep -q '| ✖ | bundle: attestation:signature | the key given is not the key the attestation names |' wrongkey.md
+          grep -q '| ✖ fail | bundle: attestation:signature | the key given is not the key the attestation names |' wrongkey.md
 
   examples-agree:
     needs: [example-r, example-python, example-c]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: capsule-*
       - name: The three provenance files match, retrieval date aside
@@ -428,3 +443,17 @@ jobs:
           cat c.json
           cmp r.json python.json
           cmp r.json c.json
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: zizmor (workflows, action.yml, dependabot.yml)
+        env:
+          GH_TOKEN: ${{ github.token }}  # online audits: impostor commits, known-vulnerable actions
+        run: pipx run zizmor==1.31.1 --min-severity low .
+      - name: The base image is pinned by digest
+        run: grep -Eq '^FROM [^ ]+@sha256:[0-9a-f]{64}$' Dockerfile

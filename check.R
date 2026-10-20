@@ -510,9 +510,9 @@ if (!length(dirs)) {
       rr <- m$results
       md <- c(md, "", sprintf("`%s`: %d result%s compared%s", m$path, nrow(rr), if (nrow(rr) == 1L) "" else "s",
                               if (length(m$removed)) paste0(", removed: ", paste(m$removed, collapse = ", ")) else ""),
-              "", "| | Result | Base | PR | Change | Tol |", "|---|---|---|---|---|---|",
+              "", "| Status | Result | Base | PR | Change | Tol |", "|---|---|---|---|---|---|",
               sprintf("| %s | %s | %s | %s | %s | %s |",
-                      ifelse(rr$status == "MATCH", mark[["ok"]], ifelse(rr$status == "NOT_RECORDED", "new", mark[["error"]])),
+                      ifelse(rr$status == "MATCH", "✔ match", ifelse(rr$status == "NOT_RECORDED", "new", "✖ mismatch")),
                       esc(rr$name), num(rr$recorded, 6), num(rr$recomputed, 6),
                       ifelse(is.na(rr$delta), "-", ifelse(rr$status == "MATCH", paste(num(rr$delta), "(within tol)"),
                                                           paste(num(rr$delta), "(outside tol)"))),
@@ -530,8 +530,8 @@ if (!length(dirs)) {
     if (!identical(r$.bounds %||% "-", "-")) md <- c(md, sprintf("- Publication bounds recorded: %s", r$.bounds))
     if (!is.null(r$.rows)) {
       ck <- r$.rows
-      md <- c(md, "", "| | Check | Detail |", "|---|---|---|",
-              sprintf("| %s | %s%s | %s |", ifelse(ck$ok, mark[["ok"]], mark[["error"]]),
+      md <- c(md, "", "| Status | Check | Detail |", "|---|---|---|",
+              sprintf("| %s | %s%s | %s |", ifelse(ck$ok, "✔ pass", "✖ fail"),
                       ifelse(ck$part %in% c("provenance", "spec"), "", paste0(ck$part, ": ")), esc(ck$check),
                       esc(ifelse(nzchar(ck$detail), ck$detail, "-"))))
     }
@@ -553,10 +553,10 @@ if (!length(dirs)) {
       if (nrow(cols)) {
         bfp <- do.call(rbind, r$.benford)
         md <- c(md, "",
-                "| | Column | Type | Statistic | p | PSI (band) | JS | Benford p (pinned / new) |",
+                "| Verdict | Column | Type | Statistic | p | PSI (band) | JS | Benford p (pinned / new) |",
                 "|---|---|---|---|---|---|---|---|",
                 sprintf("| %s | %s | %s | %s | %s | %s | %s | %s |",
-                        mark[cv$verdict], esc(cols$column), cols$type,
+                        paste(mark[cv$verdict], cv$verdict), esc(cols$column), cols$type,
                         ifelse(is.na(cols$statistic), "-",
                                paste(ifelse(cols$type %in% c("numeric", "date"), "KS D", "χ²"),
                                      num(cols$statistic))),
@@ -595,8 +595,12 @@ cat(md, sep = "\n")
 marker <- "<!-- rmbl-action -->"
 comment_state <- "off"
 if (comment != "false") {
-  body <- paste(c(marker, md), collapse = "\n")
-  if (nchar(body) > 65000L) body <- paste0(substr(body, 1L, 65000L), "\n\n(report cut to fit a comment; the full one is in the job summary)")
+  run_url <- if (nzchar(env("GITHUB_RUN_ID"))) sprintf("%s/%s/actions/runs/%s", env("GITHUB_SERVER_URL", "https://github.com"),
+                                                       env("GITHUB_REPOSITORY"), env("GITHUB_RUN_ID"))
+  link <- if (!is.null(run_url)) sprintf("\n[The run, with this report in its job summary](%s)", run_url)
+  body <- paste(c(marker, md, link), collapse = "\n")
+  if (nchar(body) > 65000L) body <- paste0(substr(body, 1L, 65000L), "\n\n(report cut to fit a comment; the full one is in the job summary",
+                                           if (!is.null(run_url)) sprintf(": %s", run_url), ")")
   pr <- tryCatch(str1(loadprov(env("GITHUB_EVENT_PATH", "/nonexistent"))$pull_request$number), error = function(e) NULL)
   if (comment == "dry-run") {
     writeLines(enc2utf8(body), "rmbl-comment.md", useBytes = TRUE)

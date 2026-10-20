@@ -1,0 +1,5 @@
+rules:
+  # uses: ./ keeps the tests runnable with act and on runners before 2.336.0; the
+  # self-repository form ($/) is for github.com only (changelog 2026-07-30)
+  self-repository:
+    disable: true

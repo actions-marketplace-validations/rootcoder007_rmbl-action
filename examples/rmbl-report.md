@@ -14,16 +14,16 @@
 - Source: https://example.org/sample.csv
 - Pinned SHA-256: `b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d`
 
-| | Check | Detail |
+| Status | Check | Detail |
 |---|---|---|
-| ✔ | schema: data_provenance.json | valid against capsule.schema.json |
-| ✔ | provenance_readable | /tmp/tmp.FaUNFG09ob/all/c/data_provenance.json |
-| ✔ | data_present | /tmp/tmp.FaUNFG09ob/all/c/sample.csv |
-| ✔ | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
-| ✔ | data_size_bytes | 79 bytes on disk |
-| ✔ | data_readable | /tmp/tmp.FaUNFG09ob/all/c/sample.csv |
-| ✔ | data_row_count | 4 rows on disk |
-| ✔ | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
+| ✔ pass | schema: data_provenance.json | valid against capsule.schema.json |
+| ✔ pass | provenance_readable | /tmp/tmp.FaUNFG09ob/all/c/data_provenance.json |
+| ✔ pass | data_present | /tmp/tmp.FaUNFG09ob/all/c/sample.csv |
+| ✔ pass | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
+| ✔ pass | data_size_bytes | 79 bytes on disk |
+| ✔ pass | data_readable | /tmp/tmp.FaUNFG09ob/all/c/sample.csv |
+| ✔ pass | data_row_count | 4 rows on disk |
+| ✔ pass | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
 
 </details>
 
@@ -33,16 +33,16 @@
 - Source: https://example.org/sample.csv
 - Pinned SHA-256: `b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d`
 
-| | Check | Detail |
+| Status | Check | Detail |
 |---|---|---|
-| ✔ | schema: data_provenance.json | valid against capsule.schema.json |
-| ✔ | provenance_readable | /tmp/tmp.FaUNFG09ob/all/python/data_provenance.json |
-| ✔ | data_present | /tmp/tmp.FaUNFG09ob/all/python/sample.csv |
-| ✔ | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
-| ✔ | data_size_bytes | 79 bytes on disk |
-| ✔ | data_readable | /tmp/tmp.FaUNFG09ob/all/python/sample.csv |
-| ✔ | data_row_count | 4 rows on disk |
-| ✔ | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
+| ✔ pass | schema: data_provenance.json | valid against capsule.schema.json |
+| ✔ pass | provenance_readable | /tmp/tmp.FaUNFG09ob/all/python/data_provenance.json |
+| ✔ pass | data_present | /tmp/tmp.FaUNFG09ob/all/python/sample.csv |
+| ✔ pass | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
+| ✔ pass | data_size_bytes | 79 bytes on disk |
+| ✔ pass | data_readable | /tmp/tmp.FaUNFG09ob/all/python/sample.csv |
+| ✔ pass | data_row_count | 4 rows on disk |
+| ✔ pass | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
 
 </details>
 
@@ -52,16 +52,16 @@
 - Source: https://example.org/sample.csv
 - Pinned SHA-256: `b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d`
 
-| | Check | Detail |
+| Status | Check | Detail |
 |---|---|---|
-| ✔ | schema: data_provenance.json | valid against capsule.schema.json |
-| ✔ | provenance_readable | /tmp/tmp.FaUNFG09ob/all/r/data_provenance.json |
-| ✔ | data_present | /tmp/tmp.FaUNFG09ob/all/r/sample.csv |
-| ✔ | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
-| ✔ | data_size_bytes | 79 bytes on disk |
-| ✔ | data_readable | /tmp/tmp.FaUNFG09ob/all/r/sample.csv |
-| ✔ | data_row_count | 4 rows on disk |
-| ✔ | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
+| ✔ pass | schema: data_provenance.json | valid against capsule.schema.json |
+| ✔ pass | provenance_readable | /tmp/tmp.FaUNFG09ob/all/r/data_provenance.json |
+| ✔ pass | data_present | /tmp/tmp.FaUNFG09ob/all/r/sample.csv |
+| ✔ pass | data_sha256 | b56e1709a40acd15c7b00dcaeec2b07b3baab5f5164372dda7513fedfe26f41d |
+| ✔ pass | data_size_bytes | 79 bytes on disk |
+| ✔ pass | data_readable | /tmp/tmp.FaUNFG09ob/all/r/sample.csv |
+| ✔ pass | data_row_count | 4 rows on disk |
+| ✔ pass | data_not_synthetic | no synthetic marker: sidecar, manifest and provenance all say real data |
 
 </details>
 
