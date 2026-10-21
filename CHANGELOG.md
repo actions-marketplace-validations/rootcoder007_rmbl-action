@@ -4,8 +4,8 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
-- Base image bumped to the rmoriebricklayer 1.0.0 CRAN resubmission build fca569bb (package links
-  to rmorie.com written as plain text; CRAN runs a fast core of the tests). No change to inputs,
+- Base image bumped to the rmoriebricklayer 1.0.0 CRAN resubmission build cefdb1a1 (package links
+  to rmorie.com written as plain text; CRAN runs a fast core of the tests and skips re-computing the vignettes). No change to inputs,
   outputs or behaviour.
 
 ## 1.0.1 (2026-10-20)
