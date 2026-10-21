@@ -9,6 +9,10 @@ on:
       version:
         description: "Version to release, vX.Y.Z (the major tag vX is moved to it)"
         required: true
+      retag:
+        description: "Move an existing vX.Y.Z (and vX) to this commit and replace its release files"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,23 +40,34 @@ jobs:
       - name: Tag, move the major tag, draft the release
         env:
           VERSION: ${{ inputs.version }}
+          RETAG: ${{ inputs.retag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           [[ "$VERSION" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be vX.Y.Z, not '$VERSION'"; exit 2; }
           major="v${BASH_REMATCH[1]}"
           test "$GITHUB_REF" = refs/heads/main || { echo "::error::release from main only, not $GITHUB_REF"; exit 2; }
-          if git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then
-            echo "::error::$VERSION exists already"; exit 2
+          exists=false
+          if git rev-parse -q --verify "refs/tags/$VERSION" > /dev/null; then exists=true; fi
+          if [ "$exists" = true ] && [ "$RETAG" != true ]; then
+            echo "::error::$VERSION exists already (run with retag to move it)"; exit 2
           fi
-          git tag "$VERSION" "$GITHUB_SHA"
+          if [ "$exists" = false ] && [ "$RETAG" = true ]; then
+            echo "::error::retag needs an existing $VERSION"; exit 2
+          fi
+          git tag -f "$VERSION" "$GITHUB_SHA"
           git tag -f "$major" "$GITHUB_SHA"
-          git push origin "refs/tags/$VERSION"
+          git push -f origin "refs/tags/$VERSION"
           git push -f origin "refs/tags/$major"
           git archive --format=tar.gz --prefix="rmbl-action-$VERSION/" -o "rmbl-action-$VERSION.tar.gz" "$VERSION"
           sha256sum "rmbl-action-$VERSION.tar.gz" > "rmbl-action-$VERSION.tar.gz.sha256"
-          gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION" \
-            "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
-          echo "$VERSION and $major -> $GITHUB_SHA; draft release created" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$RETAG" = true ]; then
+            gh release upload "$VERSION" --clobber "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
+            echo "$VERSION and $major moved to $GITHUB_SHA; release files replaced" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION" \
+              "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
+            echo "$VERSION and $major -> $GITHUB_SHA; draft release created" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Sign the source archive (Sigstore provenance attestation)
         id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -65,4 +80,4 @@ jobs:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
           cp "$BUNDLE" "rmbl-action-$VERSION.intoto.jsonl"
-          gh release upload "$VERSION" "rmbl-action-$VERSION.intoto.jsonl"
+          gh release upload "$VERSION" --clobber "rmbl-action-$VERSION.intoto.jsonl"
