@@ -4,9 +4,10 @@ Releases follow semantic versioning; `v1` always points to the latest `v1.x.y`.
 
 ## Unreleased
 
-- Base image bumped to the rmoriebricklayer 1.0.0 CRAN resubmission build 53300c88 (package links
-  to rmorie.com written as plain text; CRAN runs a fast core of the tests and skips re-computing the vignettes). No change to inputs,
-  outputs or behaviour.
+- Base image bumped to the rmoriebricklayer 1.0.0 CRAN resubmission build 07ed9f66 (package links
+  to rmorie.com written as plain text; CRAN runs a fast core of the tests and skips re-computing the vignettes). An error raised during a footprint-measured check is now named after
+  the check (`cpschk:`), not `co2fp:`. `spec/capsule.schema.json` now matches the package's schema (it
+  gains `kind`, which marks a proof ledger). No change to inputs or outputs.
 
 ## 1.0.1 (2026-10-20)
 

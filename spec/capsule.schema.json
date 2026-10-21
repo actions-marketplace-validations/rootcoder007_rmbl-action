@@ -7,6 +7,7 @@
   "required": ["resource"],
   "properties": {
     "name": {"type": "string", "description": "Capsule name (usecpstmpl())."},
+    "kind": {"type": "string", "description": "What the capsule holds; \"ledger\" marks a proof ledger (ldgrread()), whose rows rmbl verify adds (ldgrchk())."},
     "synthetic": {"type": "boolean", "description": "true marks the data as generated, which fails data_not_synthetic (vrfcps())."},
     "resource": {
       "type": "object",
