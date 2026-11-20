@@ -19,6 +19,16 @@ if [ -n "${RMBL_KEY:-}" ]; then
   export MORIE_HOSTED_KEY="${RMBL_KEY}"
 fi
 
+# keyless saving to archive.rmorie.com: in a job allowed `id-token: write`, GitHub hands the container
+# the OIDC request URL and token, and the package asks for a token for archive.rmorie.com itself
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+    echo "keyless=true" >> "${GITHUB_OUTPUT}"
+  else
+    echo "keyless=false" >> "${GITHUB_OUTPUT}"
+  fi
+fi
+
 # the workspace belongs to the runner's user, not this container's: let git read it
 # (the manifest comparison runs `git show <base>:<path>`)
 git config --global --add safe.directory "${GITHUB_WORKSPACE:-$PWD}" 2>/dev/null || true

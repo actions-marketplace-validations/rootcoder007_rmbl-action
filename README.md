@@ -209,8 +209,8 @@ validation is a check row in the report (`schema: data_provenance.json`).
 | `mode` | What it does | Network |
 |---|---|---|
 | `verify` (default) | `vrfcps()` on each provenance: data present, SHA-256, size, row count, pinned schema (`valsch()`), results manifest, pinned script digest, not synthetic. `cpsbndlvrf()` on each bundle: every file's digest, no unlisted files, the signature (an `hmac` one with the secret in `key`), and the signing key when `public-key` is given. | none |
-| `drift` | `verify`, then downloads `resource.direct_url` (else `source.url`) with `fdl()`, falling back to the Wayback snapshot in `wayback.csv_snapshot` or one looked up. When the digest differs from the pin, `cpsdrft()` compares the pinned CSV with the new one per column (Kolmogorov-Smirnov or chi-square, population stability index, Jensen-Shannon divergence, added and removed columns), and `benfordtst()` screens the first digits of numeric columns. | yes |
-| `refresh` | `drift`, then for each changed source whose new data pass the pinned schema: writes the new data and updates `resource.sha256`, `size_bytes`, `row_count_data_rows` and `retrieved_utc` in the workspace, so a later step can open a pull request. With `wayback: true` the source is captured with `wbsave()` and `wayback.csv_snapshot` updated. A bundle is not re-signed (that needs your key); the report says so. | yes |
+| `drift` | `verify`, then downloads `resource.direct_url` (else `source.url`) with `fdl()`, falling back to the Wayback snapshot in `wayback.csv_snapshot` or one looked up, and with `archive: true` to the copy kept on archive.rmorie.com with the pinned SHA-256. When the digest differs from the pin, `cpsdrft()` compares the pinned CSV with the new one per column (Kolmogorov-Smirnov or chi-square, population stability index, Jensen-Shannon divergence, added and removed columns), and `benfordtst()` screens the first digits of numeric columns. | yes |
+| `refresh` | `drift`, then for each changed source whose new data pass the pinned schema: writes the new data and updates `resource.sha256`, `size_bytes`, `row_count_data_rows` and `retrieved_utc` in the workspace, so a later step can open a pull request. With `wayback: true` the source is captured with `wbsave()` and `wayback.csv_snapshot` updated; with `archive: true` as well, a source the Wayback Machine refuses is saved to archive.rmorie.com instead. A bundle is not re-signed (that needs your key); the report says so. | yes |
 | `report` | `verify`, but the step never fails. | none |
 | `sign` | For each directory holding `data_provenance.json`: pins it on its first run (`resource.sha256`, `size_bytes`, `retrieved_utc`, `source.sha256`; `row_count_data_rows` when recorded), writes `capsule_bundle.json` with `cpsbndl()` under `key` (scheme `hmac`, over every file of the directory and `manifest.json`'s digest, or the empty manifest's), then `verify`. Fails when a bundle exists unless `overwrite: true`, or without `key`. | none |
 
@@ -330,6 +330,7 @@ jobs:
           mode: drift
           fail-on: never
           cache: true
+          archive: true
           snapshot: true
           key: ${{ secrets.MORIE_HOSTED_KEY }}
       - name: Open an issue
@@ -352,6 +353,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write   # save refused sources to archive.rmorie.com without a secret
 jobs:
   refresh:
     runs-on: ubuntu-24.04
@@ -364,6 +366,7 @@ jobs:
           mode: refresh
           fail-on: never
           wayback: true
+          archive: true
           report: ${{ runner.temp }}/rmbl-report.md
           json: ${{ runner.temp }}/rmbl-results.json
         env:
@@ -380,6 +383,30 @@ jobs:
 
 The report and JSON paths are relative to the workspace; in the refresh workflow they are
 written outside it so they do not end up in the pull request.
+
+### When the source and the Wayback Machine are both down
+
+With `archive: true`, `drift` and `refresh` fall back to archive.rmorie.com, the package's own
+archive, after the source and its Wayback snapshot: the copy kept there with the pinned SHA-256
+is fetched and checked byte for byte, and the report notes it. Reading a public copy needs no
+key, so this works in any repository.
+
+Saving needs no secret either. In `refresh` with `wayback: true`, a changed source the Wayback
+Machine refuses is saved to the archive, and in a job allowed `id-token: write` the package asks
+GitHub for the job's short-lived OIDC token: GitHub signs it, the archive checks the signature and
+the audience, and the repository (by its numeric id) is the saver. Nothing is stored in the
+repository, and running the workflow accepts the archive terms (archive.rmorie.com/terms) for it.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+```
+
+The `keyless` output says whether the job had that permission. A data.rmorie.com key in `key`
+works as well and takes precedence. With neither, the save is skipped with a note and the run
+does not fail. Save copies from R or a terminal too, with
+`arccap(url, dir, upload = "rmorie", reason = "...")` or `rmbl archive save URL --reason "..."`.
 
 ## What the summary shows
 
@@ -432,6 +459,7 @@ When no capsule is found the report says "No manifests found under `<path>`".
 | `json` | `rmbl-results.json` | JSON results path. |
 | `manifests` | | Glob restricting the capsule files checked, matched against their path, e.g. `capsules/ontario/*`. `*` also matches `/`. |
 | `wayback` | `false` | During `refresh`, capture each changed `https` source in the Wayback Machine. Needs `IA_S3_ACCESS_KEY` and `IA_S3_SECRET_KEY` in the step env. A failed capture is a note, not an error. |
+| `archive` | `false` | Use archive.rmorie.com when a source cannot be fetched: `drift` and `refresh` fetch the copy kept there with the pinned SHA-256 (public copies need no key), and with `wayback: true` a changed source the Wayback Machine refuses is saved there instead (needs the job allowed `id-token: write`, or `key`). |
 | `cache` | `false` | Keep fetched sources and data.rmorie.com tables in `.rmbl-cache/` (save and restore it with `actions/cache`). A cached source is used only when the live fetch fails, and the report says so. |
 | `allow-file` | `false` | Accept `file://` source URLs that name a file inside the checked-out repository, for local mirrors and tests; a file elsewhere on the runner is refused. |
 
@@ -451,6 +479,7 @@ hand with `docker run`, `-e RMBL_KEY=...` is the key.
 | `failed` | Number of capsules with an error. |
 | `manifest-changed` | `true` when a manifest differs from the base ref's copy. |
 | `comment` | `off`, `dry-run`, `skipped`, `created`, `updated` or `failed`. |
+| `keyless` | `true` when the job is allowed `id-token: write`, so `archive: true` saves to archive.rmorie.com without a key. |
 
 ## How it fails
 
@@ -560,9 +589,12 @@ Report a vulnerability privately: [`.github/SECURITY.md`](.github/SECURITY.md).
   API, from a header file readable by the container's user and deleted after use.
 - `verify` and `report` make no network requests except `snapshot: true` (archive.org's
   availability API) and `comment: true` (the GitHub API). `drift` and `refresh` download
-  each capsule's source (and its Wayback snapshot when the source is down).
+  each capsule's source (and its Wayback snapshot when the source is down, then with
+  `archive: true` its copy on archive.rmorie.com).
 - Nothing is uploaded anywhere, except the comment and, with `wayback: true`, the request to
-  the Internet Archive to capture the source URLs with your archive.org keys.
+  the Internet Archive to capture the source URLs with your archive.org keys; with `archive: true`
+  too, a source the Wayback Machine refuses is saved to archive.rmorie.com under the repository's
+  GitHub OIDC token (with `id-token: write`) or your key.
 - `file://` sources are refused unless `allow-file: true`, and then only files inside the
   checked-out repository (`GITHUB_WORKSPACE`); plain `http://` and private addresses are refused
   by the package.

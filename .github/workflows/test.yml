@@ -32,6 +32,7 @@ jobs:
         id: rmbl
         with:
           path: caps
+          allow-file: true
           mode: ${{ matrix.mode }}
       - name: Check outputs
         run: |
@@ -81,6 +82,7 @@ jobs:
         id: signed
         with:
           path: signed
+          allow-file: true
           public-key: ${{ env.PUB }}
       - run: test "${{ steps.signed.outputs.status }}" = ok
       - name: Signed bundle, another key
@@ -89,7 +91,8 @@ jobs:
         continue-on-error: true
         with:
           path: signed
-          public-key: "00ff"
+          allow-file: true
+          public-key: "00ff00ff00ff00ff00ff00ff00ff00ff"
       - run: |
           test "${{ steps.otherkey.outcome }}" = failure
           test "${{ steps.otherkey.outputs.status }}" = error
@@ -176,6 +179,7 @@ jobs:
         id: after
         with:
           path: caps
+          allow-file: true
       - run: test "${{ steps.after.outputs.status }}" = ok
 
       - name: Tamper with the data
@@ -186,6 +190,7 @@ jobs:
         continue-on-error: true
         with:
           path: caps
+          allow-file: true
       - run: |
           test "${{ steps.tampered.outcome }}" = failure
           test "${{ steps.tampered.outputs.status }}" = error
@@ -195,12 +200,13 @@ jobs:
         id: tamperednever
         with:
           path: caps
+          allow-file: true
           fail-on: never
       - run: test "${{ steps.tamperednever.outputs.status }}" = error
       - name: Annotations name the file and the check
         run: |
           docker run --rm -v "$PWD:/github/workspace" -w /github/workspace -e GITHUB_WORKSPACE=/github/workspace \
-            -e RMBL_PATH=caps -e RMBL_FAIL_ON=never rmbl-local > annotations.txt
+            -e RMBL_PATH=caps -e RMBL_FAIL_ON=never -e RMBL_ALLOW_FILE=true rmbl-local > annotations.txt
           grep -q '^::error file=caps/one/data_provenance.json,title=rmbl provenance data_sha256::expected ' annotations.txt
 
       - name: A refused source URL is explained
@@ -272,6 +278,7 @@ jobs:
         id: mdiff
         with:
           path: mcaps
+          allow-file: true
           base-ref: rmbl-base
           comment: dry-run
           report: mdiff.md
@@ -288,6 +295,7 @@ jobs:
         id: notoken
         with:
           path: mcaps
+          allow-file: true
           comment: true
       - run: |
           test "${{ steps.notoken.outputs.comment }}" = skipped
@@ -298,6 +306,7 @@ jobs:
         id: msame
         with:
           path: mcaps
+          allow-file: true
           base-ref: rmbl-base
       - run: test "${{ steps.msame.outputs.manifest-changed }}" = false
 
@@ -389,7 +398,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Install morie from GitHub main
@@ -512,7 +521,7 @@ jobs:
           bun-version: 1.4.3
           no-cache: true
       - if: matrix.lang == 'lua'
-        uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
+        uses: leafo/gh-actions-lua@32909a2dea0a48c433aec79e7fcd31b4cd55800f # v13.1.0
         with:
           luaVersion: "5.4"
           buildCache: false
@@ -677,6 +686,47 @@ jobs:
       - run: |
           test "${{ steps.inputkey.outputs.status }}" = ok
           test -s any/sh/capsule_bundle.json
+
+  keyless:
+    # with id-token: write, the action's container gets GitHub's OIDC request variables (output keyless),
+    # and archive.rmorie.com accepts a token GitHub issues for it: an authorised read of a blob that is
+    # not there answers 404, a refused token 401. Nothing is saved.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build -t rmbl-local .
+      - name: Make a capsule with the package
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/github/workspace" -w /github/workspace \
+            --entrypoint Rscript rmbl-local tests/make-capsule.R caps/one fixtures/source.csv /github/workspace
+      - uses: ./
+        id: rmbl
+        with:
+          path: caps
+          allow-file: true
+          mode: verify
+          archive: true
+      - name: The container saw the OIDC request variables
+        run: test "${{ steps.rmbl.outputs.keyless }}" = true
+      - name: archive.rmorie.com accepts a GitHub token for it
+        run: |
+          tok=$(curl -fsS -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https%3A%2F%2Farchive.rmorie.com" | jq -r .value)
+          echo "::add-mask::${tok}"
+          empty=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+          code=$(curl -s -o /dev/null -w "%{http_code}" -I -H "Authorization: Bearer ${tok}" "https://archive.rmorie.com/v1/blob/${empty}")
+          echo "with the token: HTTP ${code}"
+          test "${code}" = 404 || test "${code}" = 200
+          code=$(curl -s -o /dev/null -w "%{http_code}" -I "https://archive.rmorie.com/v1/blob/${empty}")
+          echo "without it: HTTP ${code}"
+          test "${code}" = 401
 
   lint:
     runs-on: ubuntu-24.04

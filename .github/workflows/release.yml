@@ -13,6 +13,10 @@ on:
         description: "Move an existing vX.Y.Z (and vX) to this commit and replace its release files"
         type: boolean
         default: false
+      publish:
+        description: "Publish the release at once instead of leaving a draft (dependabot-merge uses this)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,6 +27,9 @@ concurrency:
 jobs:
   test:
     uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+      id-token: write  # the keyless job asks GitHub for an OIDC token for archive.rmorie.com
 
   release:
     needs: test
@@ -30,6 +37,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write  # push the tags and create the draft release
+      actions: write   # start docker-publish for the new tag (tags pushed here start nothing)
       id-token: write  # sign the source archive (build provenance attestation)
       attestations: write
     steps:
@@ -41,6 +49,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           RETAG: ${{ inputs.retag }}
+          PUBLISH: ${{ inputs.publish }}
           GH_TOKEN: ${{ github.token }}
         run: |
           [[ "$VERSION" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be vX.Y.Z, not '$VERSION'"; exit 2; }
@@ -64,9 +73,11 @@ jobs:
             gh release upload "$VERSION" --clobber "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
             echo "$VERSION and $major moved to $GITHUB_SHA; release files replaced" >> "$GITHUB_STEP_SUMMARY"
           else
-            gh release create "$VERSION" --draft --verify-tag --generate-notes --title "$VERSION" \
+            draft=--draft
+            if [ "$PUBLISH" = true ]; then draft=; fi
+            gh release create "$VERSION" $draft --verify-tag --generate-notes --title "$VERSION" \
               "rmbl-action-$VERSION.tar.gz" "rmbl-action-$VERSION.tar.gz.sha256"
-            echo "$VERSION and $major -> $GITHUB_SHA; draft release created" >> "$GITHUB_STEP_SUMMARY"
+            echo "$VERSION and $major -> $GITHUB_SHA; release created${draft:+ (draft)}" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Sign the source archive (Sigstore provenance attestation)
         id: attest
@@ -81,3 +92,8 @@ jobs:
         run: |
           cp "$BUNDLE" "rmbl-action-$VERSION.intoto.jsonl"
           gh release upload "$VERSION" --clobber "rmbl-action-$VERSION.intoto.jsonl"
+      - name: Publish the action image for the new tag
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docker-publish.yml -R "$GITHUB_REPOSITORY" --ref "$VERSION"

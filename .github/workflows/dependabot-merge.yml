@@ -1,0 +1,141 @@
+name: dependabot-merge
+
+# Merges Dependabot's pull requests by itself, so a new rmorie-bricklayer
+# image (the weekly security rebuild or a release) reaches @v1 users with no
+# one clicking. It runs after the test workflow finishes on a pull request,
+# in the context of main: no pull-request code is checked out or run here.
+# It merges only when
+#   - the pull request was opened by Dependabot and its head is the commit
+#     that was tested,
+#   - it changes nothing but the Dockerfile or files under .github/workflows,
+#   - every check on that commit finished and none failed.
+# The merge is a fast-forward push of the tested commit with the write
+# deploy key in RMBL_MERGE_DEPLOY_KEY (deploy keys are the main ruleset's
+# bypass; a personal repository cannot let an app bypass it). Nothing but
+# that commit, already checked, reaches main; a branch that is not a
+# fast-forward is sent back to Dependabot to rebase.
+# When the Dockerfile changed, a patch release follows (release.yml with
+# publish), which moves v1 to it.
+on:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] no PR code is checked out
+    workflows: [test]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read        # the push uses the deploy key
+      pull-requests: write  # comment on the pull request
+      checks: read          # wait for every check on the commit
+      actions: write        # start release.yml after a Dockerfile bump
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Find the pull request and what it changes
+        id: pr
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list -R "$REPO" --head "$BRANCH" --state open \
+            --json number,author,headRefOid \
+            --jq '.[] | select(.author.login == "app/dependabot"
+                             or .author.login == "dependabot[bot]")
+                      | select(.headRefOid == env.SHA) | .number')
+          if [ -z "$pr" ]; then
+            echo "No open Dependabot pull request at $SHA; nothing to do."
+            echo "number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh pr diff "$pr" -R "$REPO" --name-only)
+          echo "$files"
+          if printf '%s\n' "$files" |
+            grep -vqE '^(Dockerfile|\.github/workflows/[^/]+\.ya?ml)$'; then
+            echo "::error::pull request $pr changes other files; review it."
+            exit 1
+          fi
+          image=false
+          if printf '%s\n' "$files" | grep -qx Dockerfile; then image=true; fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for every check on the commit
+        if: steps.pr.outputs.number != ''
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 80); do
+            runs=$(gh api --paginate \
+              "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+              --jq '.check_runs[] | "\(.status) \(.conclusion)"')
+            pending=$(printf '%s\n' "$runs" | grep -vc '^completed' || true)
+            bad=$(printf '%s\n' "$runs" | grep '^completed' |
+              grep -vcE ' (success|skipped|neutral)$' || true)
+            echo "pass $i: pending $pending, failed $bad"
+            if [ "$bad" -gt 0 ]; then
+              echo "::error::a check failed; leaving the pull request."
+              exit 1
+            fi
+            if [ "$pending" -eq 0 ]; then exit 0; fi
+            sleep 60
+          done
+          echo "::error::checks still running after 80 minutes."
+          exit 1
+
+      - name: Fast-forward main to the tested commit
+        if: steps.pr.outputs.number != ''
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          DEPLOY_KEY: ${{ secrets.RMBL_MERGE_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          trap 'rm -f "$key"' EXIT
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes"
+          git init -q repo && cd repo
+          git remote add origin "git@github.com:$REPO.git"
+          mkdir -p ~/.ssh
+          # GitHub's published host key (api.github.com/meta), not a scan
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" \
+            >> ~/.ssh/known_hosts
+          git fetch -q origin "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/$BRANCH:refs/remotes/origin/pr"
+          test "$(git rev-parse origin/pr)" = "$SHA"
+          if ! git merge-base --is-ancestor origin/main "$SHA"; then
+            gh pr comment "$PR" -R "$REPO" --body "@dependabot rebase"
+            echo "not a fast-forward of main; asked Dependabot to rebase."
+            exit 0
+          fi
+          git push origin "$SHA:refs/heads/main"
+          gh pr comment "$PR" -R "$REPO" \
+            --body "Merged by dependabot-merge after every check passed."
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+        id: merge
+
+      - name: Release the new image as the next patch version
+        if: steps.merge.outputs.merged == 'true' && steps.pr.outputs.image == 'true'
+        run: |
+          set -euo pipefail
+          last=$(gh release list -R "$REPO" --exclude-drafts --limit 50 \
+            --json tagName --jq '.[].tagName' |
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          IFS=. read -r major minor patch <<< "${last#v}"
+          next="v$major.$minor.$((patch + 1))"
+          echo "releasing $next (after $last)"
+          gh workflow run release.yml -R "$REPO" --ref main \
+            -f version="$next" -f publish=true

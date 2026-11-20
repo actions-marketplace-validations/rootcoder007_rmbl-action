@@ -52,7 +52,7 @@
     },
     "table": {
       "type": "object",
-      "description": "How the published table is read (usecpstmpl(), anltab()); rounding and suppression_limit are the publication bounds shown in the report.",
+      "description": "How the published table is read (usecpstmpl(), anytab()); rounding and suppression_limit are the publication bounds shown in the report.",
       "properties": {
         "value": {"type": "string"},
         "period": {"type": "string"},

@@ -57,6 +57,9 @@ inputs:
   wayback:
     description: "true: during refresh, ask the Internet Archive to capture each changed https source (needs IA_S3_ACCESS_KEY and IA_S3_SECRET_KEY in the step env)."
     default: "false"
+  archive:
+    description: "true: use archive.rmorie.com when a source cannot be fetched. In drift and refresh, a source that neither answers nor has its pinned Wayback snapshot is fetched from the copy kept there with the pinned SHA-256 (public copies need no key). With wayback: true, a changed source the Wayback Machine refuses is saved there instead; that needs the job allowed id-token: write (no secret: GitHub's OIDC token names the repository) or the data.rmorie.com key in key."
+    default: "false"
   cache:
     description: "true: keep fetched sources and data.rmorie.com tables in .rmbl-cache/ of the workspace (restore it with actions/cache). A cached source is used only when the live fetch fails."
     default: "false"
@@ -81,6 +84,8 @@ outputs:
     description: "true when a manifest differs from the base ref's copy (pull requests or base-ref)."
   comment:
     description: "off, dry-run, skipped, created, updated or failed."
+  keyless:
+    description: "true when the job is allowed id-token: write, so archive: true saves to archive.rmorie.com without a key (GitHub's OIDC token names the repository)."
 
 runs:
   using: "docker"
@@ -95,6 +100,7 @@ runs:
     RMBL_MANIFESTS: ${{ inputs.manifests }}
     RMBL_WAYBACK: ${{ inputs.wayback }}
     RMBL_CACHE: ${{ inputs.cache }}
+    RMBL_ARCHIVE: ${{ inputs.archive }}
     RMBL_ALLOW_FILE: ${{ inputs.allow-file }}
     RMBL_PSI_WARN: ${{ inputs.psi-warn }}
     RMBL_PSI_FAIL: ${{ inputs.psi-fail }}

@@ -48,6 +48,7 @@ if (!comment %in% c("true", "false", "dry-run")) usage("comment must be true, fa
 if (psi_warn > psi_fail) usage("psi-warn (%g) must not exceed psi-fail (%g)", psi_warn, psi_fail)
 if (!dir.exists(root)) usage("path '%s' is not a directory", root)
 flags <- list(wayback = flag("RMBL_WAYBACK", "false"), cache = flag("RMBL_CACHE", "false"),
+              archive = flag("RMBL_ARCHIVE", "false"),
               allow_file = flag("RMBL_ALLOW_FILE", "false"), snapshot = flag("RMBL_SNAPSHOT", "false"))
 cache_dir <- file.path(ws, ".rmbl-cache")
 if (flags$cache) options(rmoriebricklayer.dcache = cache_dir)  # the data.rmorie.com tables too
@@ -94,7 +95,8 @@ if (nzchar(base_ref)) {
 
 x <- cpschk(root, if (mode == "sign") "verify" else mode, key = key, pubkey = env("RMBL_PUBLIC_KEY"), psiwarn = psi_warn, psifail = psi_fail,
             base = base, cache = if (flags$cache) cache_dir else FALSE, allowfile = if (flags$allow_file) ws else FALSE,
-            snapshot = flags$snapshot, wayback = flags$wayback, glob = env("RMBL_MANIFESTS"))
+            snapshot = flags$snapshot, wayback = flags$wayback, glob = env("RMBL_MANIFESTS"),
+            archive = flags$archive)
 # refreshed files belong to the runner's user, not this container's
 changed <- vapply(Filter(function(cp) isTRUE(cp$changed), x$capsules), `[[`, "", "capsule")
 if (mode == "refresh" && length(changed)) Sys.chmod(list.files(changed, full.names = TRUE), "0666", use_umask = FALSE)
